@@ -123,3 +123,16 @@ SB_TARGET=http://192.168.219.104:8000 npm run dev     # 홈 서버 수파베이�
 `web/public/config.js`의 `SUPABASE_ANON_KEY`에 키를 넣어야 로그인됩니다 (커밋하지 마세요).
 
 DB를 바꿀 때는 `supabase/migrations/002_xxx.sql`처럼 새 파일을 추가하고 `bash scripts/migrate.sh`로 적용합니다. 이미 적용한 파일은 고치지 않습니다.
+
+## 회의록 받아쓰기 · 요약 켜기
+
+1. `.env` 에 아래를 넣습니다 (`nano .env`).
+   ```
+   COMPOSE_PROFILES=stt
+   WHISPER_MODEL=large-v3-turbo
+   ANTHROPIC_API_KEY=sk-ant-...      # 요약 · 손글씨 인식 (없으면 받아쓰기까지만)
+   ```
+2. `bash scripts/update.sh` — 받아쓰기 서버(stt)가 처음 한 번 만들어지고, 첫 녹음 때 모델(약 1.6GB)을 내려받습니다.
+3. 서버가 느리면 `WHISPER_MODEL=medium` 이나 `small` 로 바꿉니다 (빠르지만 덜 정확).
+4. 녹음은 이 서버 안에서만 받아쓰고 밖으로 보내지 않습니다. 요약 · 손글씨 인식만 Claude API로 글자/사진을 보냅니다.
+5. 휴대폰 녹음파일이 50MB를 넘으면 수파베이스 `~/supabase/docker/.env` 의 `FILE_SIZE_LIMIT` 를 늘려야 올라갑니다.

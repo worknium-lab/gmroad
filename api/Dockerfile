@@ -4,5 +4,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY *.mjs ./
 COPY boq ./boq
+COPY meetings ./meetings
 EXPOSE 3001
 CMD ["node", "server.mjs"]

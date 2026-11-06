@@ -144,5 +144,24 @@ err = null;
 try { await as(ids.staff, () => q(`insert into gm.boq_quotes (project_id, revision_id, name) values ($1,$2,'앵커')`, [pid, chg])); } catch (e) { err = e; }
 check('확정된 변경내역서에는 단가산출서를 못 씀', !!err);
 
+// 005: 회의록 — 현장 담당자도 쓰고, 확정(잠금)되면 못 고침, 타사는 못 봄
+const mid = await asCommit(ids.field, async () => (await q(`insert into gm.meetings (project_id, title, consent) values ($1, '현장 회의', true) returning id`, [pid])).rows[0].id);
+check('현장 담당자가 회의록을 만듦', !!mid);
+check('타사 직원은 회의록을 못 봄', (await as(ids.other, () => q(`select * from gm.meetings`))).rowCount === 0);
+check('본사 직원은 회의록을 봄', (await as(ids.staff, () => q(`select * from gm.meetings`))).rowCount === 1);
+const tid = await asCommit(ids.staff, async () => (await q(`insert into gm.meeting_todos (meeting_id, project_id, text, assignee_id, due_date) values ($1,$2,'받침 사진 올리기',$3,'2026-11-13') returning id`, [mid, pid, ids.field])).rows[0].id);
+check('할 일 담당자에게 알림', (await q(`select count(*)::int n from gm.notifications where user_id=$1 and title like '회의 할 일%'`, [ids.field])).rows[0].n === 1);
+await q(`update gm.meetings set locked = true where id = $1`, [mid]);
+check('확정된 회의록은 못 고침', (await as(ids.field, () => q(`update gm.meetings set title='x' where id=$1 returning id`, [mid]))).rowCount === 0);
+check('확정 후에도 담당자는 할 일 완료 체크', (await as(ids.field, () => q(`update gm.meeting_todos set done = true where id=$1 returning done_at`, [tid]))).rows[0]?.done_at != null);
+err = null;
+try { await as(ids.staff, () => q(`update gm.meeting_todos set text='바꿈' where id=$1`, [tid])); } catch (e) { err = e; }
+check('확정 후 할 일 내용은 못 바꿈', !!err);
+err = null;
+try { await as(ids.field, () => q(`insert into gm.project_alerts (project_id, kind, text) values ($1,'notice','x')`, [pid])); } catch (e) { err = e; }
+check('현장 담당자는 알림칸에 못 올림', !!err);
+const al = (await q(`insert into gm.project_alerts (project_id, kind, text) values ($1,'decision','받침 교체 11/13까지') returning id`, [pid])).rows[0].id;
+check('현장 담당자도 알림을 확인', (await as(ids.field, () => q(`insert into gm.alert_acks (alert_id, user_id) values ($1,$2) returning alert_id`, [al, ids.field]))).rowCount === 1);
+
 await c.end();
 await db.stop();

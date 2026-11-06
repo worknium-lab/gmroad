@@ -18,6 +18,7 @@ import FieldQty from './pages/field/FieldQty';
 import FieldPhoto from './pages/field/FieldPhoto';
 import FieldMaterial from './pages/field/FieldMaterial';
 import FieldRequests from './pages/field/FieldRequests';
+import FieldMeeting from './pages/field/FieldMeeting';
 
 function Gate() {
   const { session, profile, loading, isAdmin } = useAuth();
@@ -37,6 +38,7 @@ function Gate() {
       <Route path="/field/qty" element={<FieldShell title="수량 입력" back="/field"><FieldQty /></FieldShell>} />
       <Route path="/field/photo" element={<FieldShell title="사진" back="/field"><FieldPhoto /></FieldShell>} />
       <Route path="/field/material" element={<FieldShell title="자재" back="/field"><FieldMaterial /></FieldShell>} />
+      <Route path="/field/meeting" element={<FieldShell title="회의 기록" back="/field"><FieldMeeting /></FieldShell>} />
       <Route path="/field/requests" element={<FieldShell title="도면 · 알림" back="/field"><FieldRequests /></FieldShell>} />
       <Route path="*" element={<Shell><Routes>
         <Route path="/" element={<Home />} />

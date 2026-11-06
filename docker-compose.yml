@@ -26,5 +26,24 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-gmconst}
       ADMIN_TEMP_PASSWORD: ${ADMIN_TEMP_PASSWORD:-gmconst}
+      STT_URL: ${STT_URL:-http://stt:9000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # 회의 녹음 받아쓰기 (faster-whisper). 녹음은 이 서버 밖으로 나가지 않습니다.
+  # 켜기: .env 에 COMPOSE_PROFILES=stt  (처음 한 번 모델 약 1.6GB 내려받음)
+  stt:
+    build: ./stt
+    profiles: ["stt"]
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3-turbo}
+      WHISPER_COMPUTE: ${WHISPER_COMPUTE:-int8}
+      WHISPER_THREADS: ${WHISPER_THREADS:-0}
+    volumes:
+      - stt-models:/models
+
+volumes:
+  stt-models:
