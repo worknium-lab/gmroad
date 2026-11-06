@@ -4,6 +4,8 @@ import { api, q, sb } from '../../lib/supabase';
 import { download } from '../../lib/files';
 import { dt, qty, won } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Empty, Pill, Modal } from '../../lib/ui';
+import { useAuth } from '../../lib/auth';
+import { ChangeView, ChangeCreate, PasswordModal, UnlockModal, BoqLogs, fetchItems } from './BoqChange';
 
 const KIND: Record<string, [string, string]> = { design: ['설계', 'blue'], contract: ['도급', 'green'], change: ['변경', 'orange'], final: ['준공', ''] };
 const TOT: [string, string][] = [['direct', '직접공사비'], ['net', '순공사비'], ['overhead', '일반관리비'], ['profit', '이윤'], ['supply', '공급가액'], ['vat', '부가세'], ['contract', '도급(예정)액'], ['govMaterial', '관급자재'], ['grand', '총공사비']];
@@ -21,6 +23,10 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
   const [wizard, setWizard] = useState(false);
+  const [mkChange, setMkChange] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [stamp, setStamp] = useState(0);
+  const { isAdmin, profile } = useAuth();
 
   if (revs.loading || docs.loading) return <Loading />;
   if (revs.error) return <ErrorBox msg={revs.error.includes('boq_revisions') ? '내역서 표가 아직 없습니다. 서버에서 bash scripts/update.sh 를 실행해 주세요.' : revs.error} />;
@@ -29,6 +35,13 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
   const boqDocs = (docs.data || []).filter((d) => d.category === 'design_boq');
   const contractAmt = (docs.data || []).find((d) => d.category === 'contract' && d.subcategory === '도급계약서' && d.contract_amount)?.contract_amount || p.prime_amount;
   const design = list.filter((r) => r.kind === 'design');
+  const contracts = list.filter((r) => r.kind === 'contract');
+  const finals = list.filter((r) => r.kind === 'final');
+  const changeDraft = list.some((r) => r.kind === 'change' && r.status !== 'confirmed');
+  const lastFinal = [...finals].sort((a, b) => b.seq - a.seq)[0];
+  const changeBases = lastFinal ? [lastFinal] : contracts;
+  const rate = [...contracts].reverse().find((c) => c.params?.rate)?.params?.rate;
+  const refresh = async (id?: string) => { await revs.reload(); if (id) setSel(id); setStamp((x) => x + 1); };
 
   const doImport = async (d: any) => {
     setBusy(d.id);
@@ -49,18 +62,20 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
       <section className="card">
         <div className="card-h"><h2>내역서 차수</h2>
           <div className="row">
-            {design.length > 0 && <button className="btn pri" onClick={() => setWizard(true)}>도급내역서 만들기</button>}
+            {design.length > 0 && <button className={'btn' + (contracts.length ? '' : ' pri')} onClick={() => setWizard(true)}>도급내역서 만들기</button>}
+            {contracts.length > 0 && <button className="btn pri" disabled={changeDraft} title={changeDraft ? '작성 중인 변경내역서를 먼저 확정하세요' : undefined} onClick={() => setMkChange(true)}>변경내역서 만들기</button>}
+            {isAdmin && <button className="btn sm" onClick={() => setPwOpen(true)}>잠금 비밀번호</button>}
           </div>
         </div>
         {list.length === 0 && <Empty>아직 내역서가 없습니다. 아래에서 설계내역서 엑셀을 가져오세요.</Empty>}
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
           {list.map((r) => (
             <button key={r.id} className={'btn' + (cur?.id === r.id ? ' pri' : '')} onClick={() => setSel(r.id)} aria-pressed={cur?.id === r.id}>
-              <Pill c={KIND[r.kind][1]}>{KIND[r.kind][0]}</Pill> {r.title}{r.kind === 'contract' && r.params?.rate ? ` · ${pctS(r.params.rate)}` : ''}
+              <Pill c={KIND[r.kind][1]}>{KIND[r.kind][0]}</Pill> {r.title}{r.kind === 'contract' && r.params?.rate ? ` · ${pctS(r.params.rate)}` : ''}{r.kind !== 'design' && (r.locked ? ' 🔒' : r.kind === 'change' ? ' · 작성 중' : '')}
             </button>
           ))}
         </div>
-        <div className="muted" style={{ marginTop: 4 }}>설계 → 도급 → 변경 → 준공 순서입니다. 변경 · 준공내역서는 다음 단계에서 이어집니다.</div>
+        <div className="muted" style={{ marginTop: 4 }}>설계 → 도급 → 변경(1차 · 2차 …) → 준공 순서입니다. 변경내역서를 확정하면 준공내역서가 만들어지고, 다음 차수 변경은 그 준공내역서를 당초로 합니다.</div>
       </section>
 
       <section className="card">
@@ -78,16 +93,26 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
         })}
       </section>
 
-      {cur && <RevView key={cur.id} rev={cur} base={list.find((r) => r.id === cur.base_id)} onDelete={() => doDelete(cur)} />}
+      {cur && cur.kind === 'change' && <ChangeView key={cur.id} rev={cur} rate={rate} onChanged={refresh} onDelete={() => doDelete(cur)} />}
+      {cur && cur.kind !== 'change' && <RevView key={cur.id} rev={cur} base={list.find((r) => r.id === cur.base_id && r.kind !== 'change')} onDelete={() => doDelete(cur)} onChanged={refresh} />}
+      {list.length > 0 && <BoqLogs pid={pid} revId={cur?.id} stamp={stamp + (revs.data?.length || 0)} />}
+      {mkChange && <ChangeCreate p={p} bases={changeBases} onClose={() => setMkChange(false)} onDone={(id) => { setMkChange(false); refresh(id); toast('변경내역서를 만들었습니다'); }} />}
+      {pwOpen && <PasswordModal defaultCompany={p.company_id || profile?.company_id} onClose={() => setPwOpen(false)} />}
 
       {wizard && <ContractWizard designs={design} defaultTarget={contractAmt} onClose={() => setWizard(false)}
-        onDone={async (id) => { setWizard(false); await revs.reload(); setSel(id); toast('도급내역서를 만들었습니다'); }} />}
+        onDone={async (id) => { setWizard(false); await refresh(id); toast('도급내역서를 만들었습니다'); }} />}
     </>
   );
 }
 
 /* ---------- 한 차수 보기 ---------- */
-function RevView({ rev, base, onDelete }: { rev: Rev; base?: Rev; onDelete: () => void }) {
+function RevView({ rev, base, onDelete, onChanged }: { rev: Rev; base?: Rev; onDelete: () => void; onChanged: (id?: string) => void }) {
+  const toast = useToast();
+  const [unlock, setUnlock] = useState(false);
+  const confirmIt = async () => {
+    if (!window.confirm(`'${rev.title}'을(를) 확정하고 잠글까요? 잠금 해제는 비밀번호가 필요합니다.`)) return;
+    try { await api('/api/boq/confirm', { revision_id: rev.id }); toast('확정했습니다'); onChanged(rev.id); } catch (e: any) { toast(e.message); }
+  };
   const items = useLoad(() => fetchItems(rev.id), [rev.id]);
   const baseItems = useLoad(() => (base ? fetchItems(base.id) : Promise.resolve([])), [base?.id]);
   const [section, setSection] = useState<'summary' | 'detail'>('detail');
@@ -115,16 +140,19 @@ function RevView({ rev, base, onDelete }: { rev: Rev; base?: Rev; onDelete: () =
   return (
     <section className="card">
       <div className="card-h">
-        <h2><Pill c={KIND[rev.kind][1]}>{KIND[rev.kind][0]}</Pill> {rev.title}</h2>
+        <h2><Pill c={KIND[rev.kind][1]}>{KIND[rev.kind][0]}</Pill> {rev.title} {rev.kind !== 'design' && rev.locked && <Pill c="blue">🔒 확정</Pill>}</h2>
         <div className="row">
           <button className="btn" onClick={() => download(rev.storage_path, rev.file_name)}>엑셀 내려받기</button>
-          <button className="btn sm" onClick={onDelete}>지우기</button>
+          {rev.kind === 'contract' && !rev.locked && <button className="btn pri" onClick={confirmIt}>확정</button>}
+          {rev.kind === 'contract' && rev.locked && <button className="btn" onClick={() => setUnlock(true)}>잠금 해제</button>}
+          {!rev.locked && <button className="btn sm" onClick={onDelete}>지우기</button>}
         </div>
       </div>
-      <div className="muted">{rev.file_name} · 시트 '{rev.sheet_name}' · {dt(rev.created_at)} · {rev.profiles?.name || rev.profiles?.username || ''}</div>
+      <div className="muted">{rev.file_name} · 시트 '{rev.sheet_name}' · {dt(rev.created_at)} · {rev.profiles?.name || rev.profiles?.username || ''}{rev.kind === 'final' && rev.params?.from ? ` · ${rev.params.from} 확정값` : ''}</div>
+      {unlock && <UnlockModal rev={rev} onClose={() => setUnlock(false)} onDone={() => { setUnlock(false); toast('잠금을 풀었습니다'); onChanged(rev.id); }} />}
       {chk && (chk.diffCount ? <div className="banner">엑셀에 저장된 값과 프로그램 계산이 {chk.diffCount}곳 다릅니다 (예: {chk.diffs.slice(0, 3).map((d: any) => `${d.cell} 엑셀 ${won(d.excel)} / 계산 ${won(d.calc)}`).join(', ')}). 엑셀에서 다시 저장한 뒤 올려 보세요.</div>
         : <div className="banner teal">금액 {chk.checked.toLocaleString()}칸을 다시 계산해 엑셀과 모두 일치합니다.</div>)}
-      {res && <div className="banner blue">낙찰률 {pctS(res.rate)} 적용 · 단가 {res.changedCells}칸 변경 · 고정 {res.fixedCells}칸 · 이윤 조정 {won(res.profitAdjust)}원 · 이윤율 {(res.profitRate * 100).toFixed(2)}%</div>}
+      {res && <div className="banner blue">낙찰률 {pctS(res.rate)} 적용 · 단가 {res.changedCells}칸 변경 · 고정 {res.fixedCells}칸 · 이윤 조정 {won(res.profitAdjust)}원 · 이윤율 {res.profitRate}%</div>}
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
         {TOT.filter(([k]) => t[k]).map(([k, l]) => (
@@ -182,14 +210,6 @@ function RevView({ rev, base, onDelete }: { rev: Rev; base?: Rev; onDelete: () =
   );
 }
 
-async function fetchItems(revId: string) {
-  const out: Item[] = [];
-  for (let from = 0; ; from += 1000) {
-    const part = await q<Item[]>(sb.from('boq_items').select('*').eq('revision_id', revId).order('row').range(from, from + 999));
-    out.push(...part); if (part.length < 1000) break;
-  }
-  return out;
-}
 
 /* ---------- 도급내역서 만들기 (3단계) ---------- */
 function ContractWizard({ designs, defaultTarget, onClose, onDone }: { designs: Rev[]; defaultTarget: any; onClose: () => void; onDone: (id: string) => void }) {
@@ -227,7 +247,7 @@ function ContractWizard({ designs, defaultTarget, onClose, onDone }: { designs: 
   const warn: string[] = [];
   if (res) {
     if (targetN && res.residual) warn.push(`도급액이 목표와 ${won(res.residual)}원 차이 납니다. 이윤만으로 맞출 수 없습니다.`);
-    if (res.profitRate > 0.15) warn.push(`이윤율이 ${(res.profitRate * 100).toFixed(2)}%로 15%를 넘습니다. 계약금액이나 낙찰률을 다시 확인하세요.`);
+    if (res.profitRate > 15) warn.push(`이윤율이 ${res.profitRate}%로 15%를 넘습니다. 계약금액이나 낙찰률을 다시 확인하세요.`);
     if (res.profit < 0) warn.push('이윤이 0보다 작아집니다.');
   }
 
@@ -275,7 +295,7 @@ function ContractWizard({ designs, defaultTarget, onClose, onDone }: { designs: 
             <tr><td>낙찰률만 적용했을 때</td><td className="r">{won(res.afterRate)}</td></tr>
             {targetN ? <tr><td>목표 금액</td><td className="r">{won(res.target)}</td></tr> : null}
             <tr><td><b>만들어질 도급액</b></td><td className="r"><b>{won(res.reached ?? res.afterRate)}</b></td></tr>
-            <tr><td>이윤 (설계 {won(res.designProfit)})</td><td className="r">{won(res.profit)} · {(res.profitRate * 100).toFixed(2)}%</td></tr>
+            <tr><td>이윤 (설계 {won(res.designProfit)})</td><td className="r">{won(res.profit)} · {res.profitRate}%</td></tr>
             <tr><td>바뀌는 단가 칸</td><td className="r">{res.changedCells.toLocaleString()}칸</td></tr>
           </tbody></table></div>}
           {warn.map((w) => <div key={w} className="banner">{w}</div>)}

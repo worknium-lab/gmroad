@@ -124,5 +124,14 @@ err = null;
 try { await as(ids.staff, () => q(`insert into gm.boq_revisions (project_id, kind, title, storage_path, file_name, sheet_name, header_row) values ($1,'design','y','y','y','y',1)`, [pid])); } catch (e) { err = e; }
 check('직원이 직접 내역서를 쓰지 못함', !!err);
 
+// 003: 잠금 비밀번호는 화면에서 못 읽고, 이력은 내역서 권한자만 봄
+await q(`insert into gm.boq_secrets (company_id, unlock_hash) values ($1, 'scrypt$x$y')`, [co[0].id]);
+err = null;
+try { await as(ids.admin, () => q(`select * from gm.boq_secrets`)); } catch (e) { err = e; }
+check('잠금 비밀번호는 관리자도 화면에서 못 읽음', !!err);
+await q(`insert into gm.boq_logs (project_id, action) values ($1, '확정')`, [pid]);
+check('내역서 권한자는 이력을 봄', (await as(ids.staff, () => q(`select * from gm.boq_logs`))).rowCount === 1);
+check('타사 직원은 이력을 못 봄', (await as(ids.other, () => q(`select * from gm.boq_logs`))).rowCount === 0);
+
 await c.end();
 await db.stop();

@@ -3,8 +3,8 @@
 //  - patch: 원본 파일에서 지정한 셀만 값/수식으로 바꾸고 나머지(서식 · 병합 · 그림 · 다른 시트)는 그대로 둠
 import JSZip from 'jszip';
 
-const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
-const encode = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
+export const encode = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export function colToNum(c) { let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
 export function numToCol(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
@@ -32,7 +32,7 @@ export function shiftFormula(f, dr, dc) {
   return out;
 }
 
-async function sheetFiles(zip) {
+export async function sheetFiles(zip) {
   const wb = await zip.file('xl/workbook.xml').async('string');
   const rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
   const relMap = {};
@@ -151,7 +151,12 @@ export async function patchWorkbook(buf, edits, values = {}) {
     }
     zip.file(sf.path, xml);
   }
-  // 4) 계산 결과 캐시가 낡았으므로 엑셀이 열 때 다시 계산
+  await finishZip(zip);
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+/** 엑셀이 열 때 전체 다시 계산하도록 (계산 순서 캐시 지움) */
+export async function finishZip(zip) {
   let wb = await zip.file('xl/workbook.xml').async('string');
   if (/<calcPr\b/.test(wb)) wb = wb.replace(/<calcPr\b([^>]*?)(\/?)>/, (m, a, sl) => `<calcPr${a.replace(/\s*fullCalcOnLoad="[^"]*"/, '')} fullCalcOnLoad="1"${sl}>`);
   else wb = wb.replace('</workbook>', '<calcPr fullCalcOnLoad="1"/></workbook>');
@@ -161,5 +166,4 @@ export async function patchWorkbook(buf, edits, values = {}) {
   zip.file('[Content_Types].xml', ct.replace(/<Override[^>]*calcChain[^>]*\/>/, ''));
   const rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
   zip.file('xl/_rels/workbook.xml.rels', rels.replace(/<Relationship[^>]*calcChain[^>]*\/>/, ''));
-  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
