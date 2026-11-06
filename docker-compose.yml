@@ -29,6 +29,9 @@ services:
       STT_URL: ${STT_URL:-http://stt:9000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
+      LICENSE_URL: ${LICENSE_URL:-}
+      LICENSE_KEY: ${LICENSE_KEY:-}
+      WEB_INTERNAL_URL: http://web:80
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -45,5 +48,17 @@ services:
     volumes:
       - stt-models:/models
 
+  # WORKNIUM 라이선스 서버 — 대표님 서버에서만 켭니다 (고객사에는 설치하지 않음)
+  # 켜기: .env 의 COMPOSE_PROFILES 에 license 추가 (예: COMPOSE_PROFILES=stt,license)
+  license:
+    build: { context: ., dockerfile: licensing/server/Dockerfile }
+    profiles: ["license"]
+    restart: unless-stopped
+    ports:
+      - "${LICENSE_PORT:-8090}:3100"
+    volumes:
+      - license-data:/data
+
 volumes:
   stt-models:
+  license-data:

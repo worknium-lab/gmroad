@@ -1,0 +1,6 @@
+# 고객사 배포판 웹 — 소스 없이 난독화된 완성 파일(dist)만 담음 (scripts/release.sh 가 사용)
+FROM nginx:1.27-alpine
+COPY dist /usr/share/nginx/html
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY docker-entrypoint.d/ /docker-entrypoint.d/
+RUN chmod +x /docker-entrypoint.d/*.sh

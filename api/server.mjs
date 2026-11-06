@@ -6,6 +6,7 @@ import { admin, idToEmail, tempPassword } from './lib.mjs';
 import { boqRoutes } from './boq/routes.mjs';
 import { meetingRoutes } from './meetings/routes.mjs';
 import { laborRoutes } from './labor/routes.mjs';
+import { licenseRoutes, licenseMode, startLicenseWorker } from './license/client.mjs';
 import { pushRoutes, startPushWorker } from './push/push.mjs';
 import { productRoutes } from './products/routes.mjs';
 import { photoRoutes } from './photos/routes.mjs';
@@ -30,6 +31,16 @@ async function body(req) {
   return s ? JSON.parse(s) : {};
 }
 function send(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); }
+
+// 라이선스 단계별로 관리 API가 해도 되는 일 (읽기 전용: 보기 · 엑셀 내려받기만, 차단: 라이선스 · 알림만)
+const READONLY_OK = new Set(['POST /api/boq/inspect', 'POST /api/boq/refs', 'POST /api/photos/sheet-xlsx', 'POST /api/products/deliveries-xlsx', 'POST /api/labor/build', 'POST /api/admin/users/reset']);
+const ALWAYS_OK = (k) => k.startsWith('GET ') || k.startsWith('POST /api/license/') || k.startsWith('POST /api/push/');
+async function licenseGate(key) {
+  if (ALWAYS_OK(key)) return;
+  const m = await licenseMode().catch(() => 'normal');
+  if (m === 'blocked') throw [403, '라이선스 사용 기간이 끝나 사용이 중지되었습니다. 관리자에게 문의하세요.'];
+  if (m === 'readonly' && !READONLY_OK.has(key)) throw [403, '라이선스 읽기 전용 기간입니다. 보기 · 내려받기만 할 수 있습니다.'];
+}
 
 const routes = {
   'GET /api/health': async () => ({ ok: true, time: new Date().toISOString() }),
@@ -74,6 +85,7 @@ const routes = {
   ...photoRoutes,
   ...productRoutes,
   ...pushRoutes,
+  ...licenseRoutes,
 };
 
 http.createServer(async (req, res) => {
@@ -87,9 +99,10 @@ http.createServer(async (req, res) => {
   try {
     const me = path === '/api/health' ? null : await caller(req);
     if (path !== '/api/health' && !me) return send(res, 401, { error: '로그인이 필요합니다' });
+    await licenseGate(`${req.method} ${path}`);
     send(res, 200, await fn(me, req.method === 'POST' ? await body(req) : {}));
   } catch (e) {
     if (Array.isArray(e)) return send(res, e[0], { error: e[1] });
     console.error(e); send(res, 500, { error: String(e.message || e) });
   }
-}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); startPushWorker(); });
+}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); startPushWorker(); startLicenseWorker(); });

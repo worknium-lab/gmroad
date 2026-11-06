@@ -21,7 +21,7 @@ create schema storage; create table storage.buckets (id text primary key, name t
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
 alter table storage.objects enable row level security;
 create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name,'/'),1)-1] $$;
-grant usage on schema storage to authenticated; grant all on storage.objects to authenticated;
+grant usage on schema storage to authenticated, service_role; grant all on storage.objects to authenticated, service_role;
 `);
 await q(fs.readFileSync(process.argv[2], 'utf8'));
 for (const f of process.argv.slice(3)) await q(fs.readFileSync(f, 'utf8'));
@@ -263,6 +263,50 @@ check('푸시 키는 화면에서 못 읽음', !!err);
 err = null;
 try { await as(ids.field, () => q(`insert into gm.push_subscriptions (user_id, endpoint, p256dh, auth) values ($1,'x','y','z')`, [ids.staff])); } catch (e) { err = e; }
 check('남의 이름으로 기기 등록 못 함', !!err);
+
+// 011: 라이선스 잠금
+const mode = async () => (await as(ids.staff, () => q(`select gm.license_mode() m`))).rows[0].m;
+const setPaid = (sql) => q(`update gm.license_state set ${sql}`);
+check('처음 설치는 정상 (설정 기간 60일)', await mode() === 'normal');
+err = null;
+try { await as(ids.admin, () => q(`update gm.license_state set paid_until = '2099-12-31'`)); } catch (e) { err = e; }
+check('관리자 계정도 라이선스 값을 못 고침', !!err);
+err = null;
+try { await as(ids.admin, () => q(`select * from gm.license_state`)); } catch (e) { err = e; }
+check('라이선스 원본은 화면에서 못 읽음', !!err);
+check('요약 정보는 누구나 봄', (await as(ids.field, () => q(`select gm.license_info() i`))).rows[0].i.mode === 'normal');
+const kst = (d) => new Date(Date.now() + 9 * 3600e3 + d * 864e5).toISOString().slice(0, 10);
+await setPaid(`paid_until = '${kst(-3)}'`);
+check('만료 3일 뒤 = 유예', await mode() === 'grace');
+check('유예 때는 입력 가능', (await as(ids.staff, () => q(`update gm.projects set memo = 'x' where id=$1 returning id`, [pid]))).rowCount === 1);
+await setPaid(`paid_until = '${kst(-10)}'`);
+check('만료 10일 뒤 = 읽기 전용', await mode() === 'readonly');
+err = null;
+try { await as(ids.staff, () => q(`update gm.projects set memo = 'x' where id=$1`, [pid])); } catch (e) { err = e; }
+check('읽기 전용: 입력 막힘', !!err && /읽기 전용/.test(err.message));
+check('읽기 전용: 관리 API(서비스 키)는 내려받기 파일 저장 가능', (await (async () => { await q('begin'); await q('set local role service_role'); try { return await q(`insert into storage.objects (bucket_id, name) values ('project-files', $1) returning id`, [pid + '/sheets/x.xlsx']); } finally { await q('rollback'); } })()).rowCount === 1);
+check('읽기 전용: 보기는 됨', (await as(ids.staff, () => q(`select * from gm.projects`))).rowCount === 1);
+err = null;
+try { await as(ids.field, () => q(`insert into storage.objects (bucket_id, name) values ('project-files', $1)`, [pid + '/photos/z.jpg'])); } catch (e) { err = e; }
+check('읽기 전용: 파일 올리기 막힘', !!err);
+check('읽기 전용: 알림 읽음 표시는 됨', (await as(ids.field, () => q(`update gm.notifications set read_at = now() where user_id=$1 returning id`, [ids.field]))).rowCount >= 0);
+err = null;
+try { await q(`create table gm.zz_new (id int)`); await as(ids.staff, () => q(`insert into gm.zz_new values (1)`)); } catch (e) { err = e; }
+check('나중에 만든 테이블도 자동으로 잠김', !!err);
+await q(`drop table gm.zz_new`);
+await setPaid(`readonly_extra = 5, paid_until = '${kst(-40)}'`);
+check('백업 연장 5일이면 40일째도 읽기 전용', await mode() === 'readonly');
+await setPaid(`readonly_extra = 0`);
+check('39일 지나면 차단', await mode() === 'blocked');
+await setPaid(`paid_until = '${kst(20)}', max_seen_at = now() + interval '30 days'`);
+check('시계를 되돌려도 늦은 시각 기준 (만료 10일 지난 것으로 계산)', await mode() === 'readonly');
+await setPaid(`paid_until = '${kst(60)}', max_seen_at = now(), tampered = true`);
+check('위변조 감지 → 읽기 전용', await mode() === 'readonly');
+await setPaid(`tampered = false`);
+await q(`delete from gm.license_state`);
+check('라이선스 행을 지우면 차단', await mode() === 'blocked');
+await q(`insert into gm.license_state (id) values (1)`);
+check('다시 정상', await mode() === 'normal');
 
 await c.end();
 await db.stop();

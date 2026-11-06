@@ -345,3 +345,10 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 .fact { display: grid; grid-template-columns: 120px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line-2); } .fact .k { color: var(--sub-2); font-size: 13px; }
 .pdph { display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 560px) { .mchart { gap: 2px; height: 180px; } .mcol .v { display: none; } }
+
+/* ---------- 라이선스 띠 ---------- */
+.lic-band { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 20px; font-size: 14px; border-bottom: 1px solid; }
+.lic-band span { flex: 1; min-width: 220px; }
+.lic-band.notice { background: var(--orange-l); color: var(--orange-t); border-color: var(--orange-b); }
+.lic-band.grace { background: var(--red-l); color: var(--red); border-color: #F2B8B0; }
+.lic-band.ro { background: var(--red); color: #fff; border-color: var(--red); }

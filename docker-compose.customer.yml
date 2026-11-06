@@ -1,0 +1,36 @@
+# 고객사 서버용 — 소스코드 없이 WORKNIUM이 만든 배포판 이미지만 받아서 띄웁니다
+#   .env 에 GM_REGISTRY · GM_VERSION · LICENSE_URL · LICENSE_KEY 와 수파베이스 키를 넣고
+#   docker compose -f docker-compose.customer.yml up -d
+name: gm-integrated
+
+services:
+  web:
+    image: ${GM_REGISTRY}/gm-web:${GM_VERSION}
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_INTERNAL_URL: ${SUPABASE_INTERNAL_URL:-http://host.docker.internal:8000}
+      GM_PUBLIC_SUPABASE_URL: ${GM_PUBLIC_SUPABASE_URL:-}
+      NGINX_ENVSUBST_FILTER: "SUPABASE_INTERNAL_URL"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [api]
+
+  api:
+    image: ${GM_REGISTRY}/gm-api:${GM_VERSION}
+    restart: unless-stopped
+    environment:
+      SUPABASE_INTERNAL_URL: ${SUPABASE_INTERNAL_URL:-http://host.docker.internal:8000}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_TEMP_PASSWORD: ${ADMIN_TEMP_PASSWORD:-}
+      STT_URL: ${STT_URL:-http://stt:9000}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
+      LICENSE_URL: ${LICENSE_URL}
+      LICENSE_KEY: ${LICENSE_KEY}
+      WEB_INTERNAL_URL: http://web:80
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

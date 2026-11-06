@@ -23,12 +23,15 @@ import { SpaceHome, Directory } from './pages/space/Space';
 import { BoardList, PostView, PostEdit } from './pages/space/Board';
 import Library from './pages/space/Library';
 import CalendarPage from './pages/space/Calendar';
+import LicensePage from './pages/admin/License';
+import { LicenseProvider, LicenseBanner, LicenseBlocked, useLicense } from './lib/license';
 import { ProductDashboard, ProductList, ProductDetail, DeliveryPage } from './pages/products/Products';
 import { PhotoHome, PhotoAlbum } from './pages/photos/PhotoApp';
 import { SheetList, SheetEditor } from './pages/photos/PhotoSheet';
 
 function Gate() {
   const { session, profile, loading, isAdmin } = useAuth();
+  const { info: lic } = useLicense();
   const loc = useLocation();
   if (!cfg.SUPABASE_ANON_KEY) return <div className="spin">설정이 비어 있습니다. 서버의 .env에 SUPABASE_URL · SUPABASE_ANON_KEY를 넣고 다시 띄워 주세요.</div>;
   if (loading) return <Loading />;
@@ -36,6 +39,7 @@ function Gate() {
   if (!profile) return <div className="spin">계정 정보(profiles)가 없습니다. 관리자에게 문의하세요. <button className="link" onClick={() => import('./lib/push').then((m) => m.logout())}>로그아웃</button></div>;
   if (!profile.active) return <div className="spin">사용이 중지된 계정입니다.</div>;
   if (profile.must_change_password) return <ChangePassword forced />;
+  if (lic?.mode === 'blocked' && !(isAdmin && loc.pathname === '/admin/license')) return <LicenseBlocked />;
   const fieldOnly = profile.role === 'field';
   if (fieldOnly && !loc.pathname.startsWith('/field') && !loc.pathname.startsWith('/space') && !loc.pathname.startsWith('/photos') && loc.pathname !== '/me' && loc.pathname !== '/notifications') return <Navigate to="/field" replace />;
 
@@ -72,6 +76,7 @@ function Gate() {
         <Route path="/me" element={<Me />} />
         {isAdmin && <Route path="/admin/users" element={<Users />} />}
         {isAdmin && <Route path="/admin/companies" element={<Companies />} />}
+        {isAdmin && <Route path="/admin/license" element={<LicensePage />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes></Shell>} />
     </Routes>
@@ -79,5 +84,5 @@ function Gate() {
 }
 
 export default function App() {
-  return <BrowserRouter><AuthProvider><ToastProvider><Gate /></ToastProvider></AuthProvider></BrowserRouter>;
+  return <BrowserRouter><AuthProvider><LicenseProvider><ToastProvider><Gate /></ToastProvider></LicenseProvider></AuthProvider></BrowserRouter>;
 }

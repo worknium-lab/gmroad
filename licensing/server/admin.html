@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORKNIUM 라이선스</title>
+<style>
+:root{--navy:#14243D;--blue:#1F4E8C;--orange:#F0A35E;--red:#A1271A;--green:#0F6E4A;--line:#E1E5EC;--sub:#4A5468;--bg:#F4F6F9}
+*{box-sizing:border-box}body{margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:#1A2233;font-size:14px}
+header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0}header b{font-size:17px;flex:1}
+main{max-width:1100px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
+button,.btn{height:44px;padding:0 14px;border-radius:8px;border:1px solid #C5CDD9;background:#fff;font:inherit;cursor:pointer}
+button.pri{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.danger{color:var(--red);border-color:var(--red)}button.sm{height:34px;font-size:13px;padding:0 10px}
+input,select,textarea{height:44px;border:1px solid #C5CDD9;border-radius:8px;padding:0 10px;font:inherit;min-width:0}textarea{height:auto;padding:8px;width:100%}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500}
+.pill{font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;background:#EEF1F6}.ok{background:#E3F2EC;color:var(--green)}.warn{background:#FFF1E0;color:#8A4B00}.bad{background:#FDECEA;color:var(--red)}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-top:1px solid #EDF0F4;text-align:left;vertical-align:top}th{font-size:12px;color:var(--sub);font-weight:500}
+.mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}.muted{color:var(--sub);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:10px;display:none}
+</style></head><body>
+<header><b>WORKNIUM 라이선스</b><span id="who" class="muted" style="color:#C9D3E3"></span></header>
+<main id="app"></main><div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let T=sessionStorage.getItem('lt')||'',S=null;
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2800)}
+async function call(p,b){const r=await fetch(p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(r.status===401&&p!=='/admin/api/login'){T='';sessionStorage.removeItem('lt');loginView();throw new Error('다시 로그인하세요')}if(!r.ok)throw new Error(j.error||r.statusText);return j}
+const won=n=>n==null||n===''?'-':Math.trunc(+n).toLocaleString('ko-KR');
+function days(a,b){return Math.round((new Date(a)-new Date(b))/864e5)}
+function stage(c,today){const d=days(today,c.paid_until);if(c.tamper_hold)return['읽기 전용 (위변조)','bad'];if(d<=0){const t=today.slice(0,7)===c.paid_until.slice(0,7)&&+today.slice(8)>10;return t?['미입금 알림','warn']:['정상','ok']}if(d<=7)return['유예 '+d+'일째','warn'];if(d<=38+(c.readonly_extra||0))return['읽기 전용 '+d+'일째','bad'];return['차단','bad']}
+function loginView(){$('#app').innerHTML=`<section class="card" style="max-width:420px;margin:40px auto"><h2 style="margin:0">관리 로그인</h2><span class="muted">처음이면 지금 넣는 비밀번호(8자 이상)가 관리 비밀번호가 됩니다.</span><input id="pw" type="password" autocomplete="current-password" placeholder="관리 비밀번호"><button class="pri" id="lg">로그인</button></section>`;
+ $('#lg').onclick=async()=>{try{T=(await call('/admin/api/login',{password:$('#pw').value})).token;sessionStorage.setItem('lt',T);load()}catch(e){toast(e.message)}};$('#pw').onkeydown=e=>e.key==='Enter'&&$('#lg').click()}
+async function load(){try{S=await call('/admin/api/state');render()}catch(e){toast(e.message)}}
+function render(){const t=S.today;
+ let h=`<section class="card"><div class="row"><h2 style="margin:0" class="sp">고객사 ${S.customers.length}곳</h2><button class="pri" id="add">＋ 고객사 등록</button><button id="pushon">이 폰으로 알림 받기</button></div>
+ <table><thead><tr><th>고객사</th><th>상태</th><th>사용 기한</th><th>월 구독료</th><th>마지막 확인</th><th></th></tr></thead><tbody>`+
+ S.customers.map(c=>{const[s,k]=stage(c,t);const lc=c.last_check;return`<tr><td><b>${esc(c.name)}</b><div class="muted">${esc(c.biz_no||'')} · 키 …${esc(c.key_tail)}${c.allow_dev?' · 개발판 허용':''}</div></td><td><span class="pill ${k}">${s}</span>${c.tamper_hold?`<div class="muted">${esc(c.tamper_note)}</div>`:''}</td><td>${c.paid_until}<div class="muted">${days(c.paid_until,t)>=0?'D-'+days(c.paid_until,t):days(t,c.paid_until)+'일 지남'}${c.readonly_extra?' · 백업 연장 '+c.readonly_extra+'일':''}</div></td><td>${won(c.fee_month)}</td><td class="muted">${lc?esc(lc.at.slice(0,16).replace('T',' '))+'<br>'+esc(lc.version||''):'아직 없음'}</td><td><button class="sm" data-open="${c.id}">관리</button></td></tr>`}).join('')+`</tbody></table></section>`;
+ h+=`<section class="card"><h3 style="margin:0">최근 기록</h3><table><tbody>${S.events.slice(0,40).map(e=>`<tr><td class="muted" style="white-space:nowrap">${esc(e.at.slice(0,16).replace('T',' '))}</td><td><span class="pill ${/위변조|미등록|DB 변조/.test(e.kind)?'bad':/새 설치/.test(e.kind)?'warn':''}">${esc(e.kind)}</span></td><td>${esc(e.text)}</td></tr>`).join('')||'<tr><td class="muted">없음</td></tr>'}</tbody></table></section>`;
+ h+=`<section class="card"><h3 style="margin:0">서명 공개키 · 배포판</h3><span class="muted">공개키는 배포판에 박혀 들어갑니다 (비밀 아님). 개인키는 이 서버의 /data/keys 에만 있습니다 — 반드시 따로 백업하세요.</span><div class="mono">${esc(S.pubkey)}</div><div class="muted">등록된 배포판: ${S.versions.map(v=>esc(v.v)+' ('+v.n+'개 파일)').join(', ')||'없음'}</div><div class="row"><button id="pwc">관리 비밀번호 바꾸기</button></div></section>`;
+ $('#app').innerHTML=h;
+ $('#add').onclick=()=>edit();document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>detail(b.dataset.open));
+ $('#pushon').onclick=pushOn;$('#pwc').onclick=async()=>{const p=prompt('새 관리 비밀번호 (8자 이상)');if(p)try{await call('/admin/api/password',{password:p});toast('바꿨습니다. 다시 로그인하세요');T='';loginView()}catch(e){toast(e.message)}};
+}
+function edit(c={}){$('#app').innerHTML=`<section class="card"><h2 style="margin:0">${c.id?'고객사 정보':'고객사 등록'}</h2><div class="grid">
+ <label>회사 이름<input id="f_name" value="${esc(c.name)}"></label><label>사업자번호<input id="f_biz" value="${esc(c.biz_no)}"></label><label>담당자 · 연락처<input id="f_ct" value="${esc(c.contact)}"></label>
+ <label>도입비 (원)<input id="f_fs" inputmode="numeric" value="${esc(c.fee_setup??2000000)}"></label><label>월 구독료 (원)<input id="f_fm" inputmode="numeric" value="${esc(c.fee_month??200000)}"></label>
+ ${c.id?'':`<label>처음 사용 기한<input id="f_pu" type="date" value="${S.today}"></label>`}</div>
+ <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="f_dev" ${c.allow_dev?'checked':''} style="height:auto"> 개발판 허용 (GitHub에서 받은 테스트 서버 — 실제 고객사는 끄세요)</label>
+ <label>메모<textarea id="f_memo" rows="2">${esc(c.memo)}</textarea></label>
+ <div class="row"><button id="cx">취소</button><button class="pri" id="sv">저장</button></div></section>`;
+ $('#cx').onclick=c.id?()=>detail(c.id):load;
+ $('#sv').onclick=async()=>{try{const r=await call('/admin/api/customer',{id:c.id,name:$('#f_name').value.trim(),biz_no:$('#f_biz').value,contact:$('#f_ct').value,fee_setup:+$('#f_fs').value.replace(/\D/g,''),fee_month:+$('#f_fm').value.replace(/\D/g,''),memo:$('#f_memo').value,allow_dev:$('#f_dev').checked,paid_until:c.id?undefined:$('#f_pu').value});S=await call('/admin/api/state');if(!c.id)alert('고객 키: '+r.key+'\n\n고객사 서버 .env 의 LICENSE_KEY 에 넣습니다. (관리 화면에서 다시 볼 수 있음)');detail(r.id)}catch(e){toast(e.message)}};
+}
+function detail(id){const c=S.customers.find(x=>x.id===id);const[s,k]=stage(c,S.today);
+ $('#app').innerHTML=`<section class="card"><div class="row"><button class="sm" id="bk">‹ 목록</button><h2 style="margin:0" class="sp">${esc(c.name)}</h2><span class="pill ${k}">${s}</span></div>
+ <div class="grid"><div><div class="muted">사용 기한</div><b style="font-size:20px">${c.paid_until}</b></div><div><div class="muted">월 구독료</div><b>${won(c.fee_month)}원</b></div><div><div class="muted">도입비</div><b>${won(c.fee_setup)}원</b></div><div><div class="muted">백업 연장</div><b>${c.readonly_extra||0}일</b></div></div>
+ ${c.tamper_hold?`<div class="row" style="background:#FDECEA;padding:10px;border-radius:8px"><b class="sp" style="color:#A1271A">${esc(c.tamper_note)}</b><button class="danger sm" id="ct">확인했음 · 해제</button></div>`:''}
+ <h3 style="margin:6px 0 0">입금 확인</h3><div class="row"><select id="pm"><option value="1">1개월</option><option value="2">2개월</option><option value="3">3개월</option><option value="6">6개월</option><option value="12">12개월</option></select><input id="pa" inputmode="numeric" placeholder="입금액 (선택)" style="width:150px"><input id="pmemo" placeholder="메모 (선택)" class="sp"><button class="pri" id="pay">입금 확인</button></div>
+ <span class="muted">누르면 사용 기한이 그 달 말일까지 늘고, 고객 서버가 다음 확인(하루 1번) 때 자동으로 받아 갑니다. 급하면 고객 화면의 [지금 확인].</span>
+ <div class="row"><input type="date" id="su" value="${c.paid_until}"><input id="sumemo" placeholder="사유 (예: 계약 전 무료)" class="sp"><button id="setu">사용 기한 직접 지정</button></div>
+ <div class="row"><input id="xd" inputmode="numeric" placeholder="백업 연장 일수" style="width:150px"><button id="ext">백업 기간 연장 (1일 10만 원)</button></div>
+ <h3 style="margin:6px 0 0">설치된 서버</h3><table><thead><tr><th>설치 번호</th><th>상태</th><th>마지막 연결</th><th></th></tr></thead><tbody>${(c.installs||[]).map(i=>`<tr><td class="mono">${esc(i.iid)}</td><td><span class="pill ${i.approved?'ok':'bad'}">${i.approved?'승인':'승인 안 됨'}</span></td><td class="muted">${esc((i.last_seen||'').slice(0,16).replace('T',' '))} · ${esc(i.ip||'')} · ${esc(i.version||'')}</td><td><button class="sm" data-ap="${i.iid}" data-v="${i.approved?0:1}">${i.approved?'승인 취소':'승인'}</button> <button class="sm danger" data-rm="${i.iid}">삭제</button></td></tr>`).join('')||'<tr><td class="muted">아직 연결된 서버가 없습니다</td></tr>'}</tbody></table>
+ <h3 style="margin:6px 0 0">인터넷이 안 되는 서버용 라이선스 파일</h3><div class="row"><input id="oiid" class="sp" placeholder="고객 화면 › 관리자 › 라이선스의 '설치 번호'"><button id="off">파일 만들기</button></div><textarea id="otok" rows="3" readonly class="mono" placeholder="여기에 나온 글자를 고객 화면에 붙여 넣습니다"></textarea>
+ <div class="row"><button id="ed">정보 고치기</button><button id="key">고객 키 보기</button></div>
+ <h3 style="margin:6px 0 0">입금 기록</h3><table><tbody>${(c.payments||[]).slice().reverse().map(p=>`<tr><td class="muted">${esc(p.at.slice(0,10))}</td><td>${p.months}개월</td><td>${esc(p.from)} → ${esc(p.until)}</td><td>${won(p.amount)}</td><td>${esc(p.memo)}</td></tr>`).join('')||'<tr><td class="muted">없음</td></tr>'}</tbody></table></section>`;
+ const act=async(p,b,m)=>{try{await call(p,b);toast(m);S=await call('/admin/api/state');detail(id)}catch(e){toast(e.message)}};
+ $('#bk').onclick=load;$('#ed').onclick=()=>edit(c);
+ $('#key').onclick=async()=>{try{alert('고객 키: '+(await call('/admin/api/key',{id})).key)}catch(e){toast(e.message)}};
+ $('#pay').onclick=()=>confirm(`${c.name} ${$('#pm').value}개월 입금을 확인할까요?`)&&act('/admin/api/pay',{id,months:+$('#pm').value,amount:+$('#pa').value.replace(/\D/g,'')||null,memo:$('#pmemo').value},'입금 확인 — 사용 기한을 늘렸습니다');
+ $('#setu').onclick=()=>act('/admin/api/set-until',{id,paid_until:$('#su').value,memo:$('#sumemo').value},'사용 기한을 바꿨습니다');
+ $('#ext').onclick=()=>+$('#xd').value>0&&act('/admin/api/extend',{id,days:+$('#xd').value},'백업 기간을 늘렸습니다');
+ if($('#ct'))$('#ct').onclick=()=>confirm('위변조 원인을 확인했나요? 해제하면 다음 확인 때 정상으로 돌아갑니다.')&&act('/admin/api/clear-tamper',{id},'해제했습니다');
+ document.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>act('/admin/api/install',{id,iid:b.dataset.ap,approved:b.dataset.v==='1'},'바꿨습니다'));
+ document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>confirm('이 설치를 목록에서 지울까요?')&&act('/admin/api/install',{id,iid:b.dataset.rm,remove:true},'지웠습니다'));
+ $('#off').onclick=async()=>{try{$('#otok').value=(await call('/admin/api/offline',{id,iid:$('#oiid').value.trim()})).token;$('#otok').select()}catch(e){toast(e.message)}};
+}
+async function pushOn(){try{if(!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('이 브라우저는 알림을 지원하지 않습니다 (아이폰은 홈 화면에 추가 후)');
+ if(await Notification.requestPermission()!=='granted')throw new Error('알림 허락이 필요합니다');const r=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
+ const k=S.vapid,p='='.repeat((4-k.length%4)%4),raw=atob((k+p).replace(/-/g,'+').replace(/_/g,'/'));const sub=(await r.pushManager.getSubscription())||await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))});
+ await call('/admin/api/push',sub.toJSON());await call('/admin/api/push-test',{});toast('이 기기로 위변조 · 새 설치 알림을 받습니다')}catch(e){toast(e.message)}}
+T?load():loginView();
+</script></body></html>

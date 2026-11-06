@@ -1,3 +1,4 @@
+import { LicenseBanner } from '../lib/license';
 import { logout } from '../lib/push';
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -28,7 +29,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { head: '회사 공용공간', items: [{ to: '/space', label: '공용공간 홈' }, { to: '/space/board', label: '게시판', match: '/space/board' }, { to: '/space/library', label: '자료실' }, { to: '/space/calendar', label: '회사 일정' }, { to: '/space/directory', label: '사내 연락처' }] },
     { head: '내 정보', items: [{ to: '/me', label: '인사정보 · 비밀번호' }] },
   ];
-  if (isAdmin) groups.push({ head: '관리자', lock: true, items: [{ to: '/admin/users', label: '사용자 · 권한' }, { to: '/admin/companies', label: '회사 관리' }] });
+  if (isAdmin) groups.push({ head: '관리자', lock: true, items: [{ to: '/admin/users', label: '사용자 · 권한' }, { to: '/admin/companies', label: '회사 관리' }, { to: '/admin/license', label: '라이선스' }] });
   const isOn = (i: Item) => (i.match ? loc.pathname.startsWith(i.match) && loc.pathname !== i.not : loc.pathname === i.to);
 
   return (
@@ -58,6 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <button className="btn sm hide-m" onClick={() => logout()}>로그아웃</button>
         </header>
+        <LicenseBanner />
         <main className="page">{children}</main>
       </div>
       <nav className="mtabs" aria-label="하단 메뉴">
