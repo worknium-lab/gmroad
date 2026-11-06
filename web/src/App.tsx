@@ -23,6 +23,8 @@ import { SpaceHome, Directory } from './pages/space/Space';
 import { BoardList, PostView, PostEdit } from './pages/space/Board';
 import Library from './pages/space/Library';
 import CalendarPage from './pages/space/Calendar';
+import { PhotoHome, PhotoAlbum } from './pages/photos/PhotoApp';
+import { SheetList, SheetEditor } from './pages/photos/PhotoSheet';
 
 function Gate() {
   const { session, profile, loading, isAdmin } = useAuth();
@@ -34,7 +36,7 @@ function Gate() {
   if (!profile.active) return <div className="spin">사용이 중지된 계정입니다.</div>;
   if (profile.must_change_password) return <ChangePassword forced />;
   const fieldOnly = profile.role === 'field';
-  if (fieldOnly && !loc.pathname.startsWith('/field') && !loc.pathname.startsWith('/space') && loc.pathname !== '/me' && loc.pathname !== '/notifications') return <Navigate to="/field" replace />;
+  if (fieldOnly && !loc.pathname.startsWith('/field') && !loc.pathname.startsWith('/space') && !loc.pathname.startsWith('/photos') && loc.pathname !== '/me' && loc.pathname !== '/notifications') return <Navigate to="/field" replace />;
 
   return (
     <Routes>
@@ -44,6 +46,10 @@ function Gate() {
       <Route path="/field/material" element={<FieldShell title="자재" back="/field"><FieldMaterial /></FieldShell>} />
       <Route path="/field/meeting" element={<FieldShell title="회의 기록" back="/field"><FieldMeeting /></FieldShell>} />
       <Route path="/field/requests" element={<FieldShell title="도면 · 알림" back="/field"><FieldRequests /></FieldShell>} />
+      <Route path="/photos" element={<PhotoHome />} />
+      <Route path="/photos/:pid" element={<PhotoAlbum />} />
+      <Route path="/photos/:pid/sheets" element={<SheetList />} />
+      <Route path="/photos/:pid/sheets/:sid" element={<SheetEditor />} />
       <Route path="*" element={<Shell><Routes>
         <Route path="/" element={<Home />} />
         <Route path="/projects" element={<Projects />} />

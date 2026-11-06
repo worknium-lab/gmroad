@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { sb, q } from '../../lib/supabase';
-import { upload } from '../../lib/files';
+import { preparePhoto } from '../../lib/photos';
+import { Link } from 'react-router-dom';
 import { loadStructure, Structure } from '../../lib/data';
 import { useAuth } from '../../lib/auth';
 import { useField } from './FieldShell';
@@ -20,7 +21,7 @@ export default function FieldPhoto() {
   const [m, setM] = useState({ location_id: '', work_item_id: '', kind: '시공 중', memo: '', request_id: '' });
   const [busy, setBusy] = useState(false);
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
-  const urls = useSigned(list.map((p) => p.storage_path));
+  const urls = useSigned(list.map((p) => p.thumb_path || p.storage_path));
 
   const load = async () => {
     const [s, r, l] = await Promise.all([
@@ -42,8 +43,8 @@ export default function FieldPhoto() {
     try {
       const r = await ensureReport();
       for (const f of files) {
-        const { path } = await upload(pid, 'photos/' + today(), f, f.name, true);
-        await q(sb.from('photos').insert({ project_id: pid, report_id: r.id, location_id: m.location_id || null, work_item_id: m.work_item_id || null, request_id: m.request_id || null, kind: m.kind, memo: m.memo || null, storage_path: path, taken_at: new Date((f as any).lastModified || Date.now()).toISOString(), lat: gps?.lat, lng: gps?.lng, uploaded_by: profile!.id }));
+        const ph = await preparePhoto(pid, f, gps);
+        await q(sb.from('photos').insert({ project_id: pid, report_id: r.id, location_id: m.location_id || null, work_item_id: m.work_item_id || null, request_id: m.request_id || null, kind: m.kind, memo: m.memo || null, uploaded_by: profile!.id, ...ph }));
       }
       if (m.request_id) await q(sb.from('requests').update({ status: 'done', answer_note: `사진 ${files.length}장`, answered_at: new Date().toISOString() }).eq('id', m.request_id));
       toast(`${files.length}장 올렸습니다`); setFiles([]); setPreviews([]); setM({ ...m, memo: '', request_id: '' }); load();
@@ -54,7 +55,7 @@ export default function FieldPhoto() {
 
   return (
     <>
-      <h1 style={{ fontSize: 20 }}>사진 {report ? '' : ''}</h1>
+      <div className="row" style={{ justifyContent: 'space-between' }}><h1 style={{ fontSize: 20 }}>사진</h1><Link className="btn sm" to={'/photos/' + pid}>사진첩 열기 ›</Link></div>
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <button className="btn teal" style={{ height: 88, fontSize: 16 }} onClick={() => cam.current?.click()}>📷 사진 찍기</button>
         <button className="btn" style={{ height: 88, fontSize: 16, fontWeight: 700 }} onClick={() => alb.current?.click()}>앨범에서 고르기</button>
@@ -75,7 +76,7 @@ export default function FieldPhoto() {
         <button className="btn teal block" disabled={busy} onClick={send}>{busy ? '올리는 중…' : `${files.length}장 올리기`}</button>
       </section>}
       <section className="fcard"><h2>오늘 올린 사진 {list.length}</h2>
-        <div className="photo-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>{list.map((p) => <a key={p.id} className="photo" href={urls[p.storage_path]} target="_blank" rel="noreferrer">{urls[p.storage_path] && <img src={urls[p.storage_path]} alt={p.memo || p.kind} />}<span className="tag pill">{p.kind}</span></a>)}</div>
+        <div className="photo-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>{list.map((p) => <Link key={p.id} className="photo" to={'/photos/' + pid + '?photo=' + p.id}>{urls[p.thumb_path || p.storage_path] && <img src={urls[p.thumb_path || p.storage_path]} alt={p.memo || p.kind} loading="lazy" />}<span className="tag pill">{p.kind}</span></Link>)}</div>
         {!list.length && <span className="sub">아직 없습니다. 위치별 사진 1장 이상을 권장합니다.</span>}
         {list[0] && <span className="muted">마지막 업로드 {dt(list[0].created_at)}</span>}
       </section>

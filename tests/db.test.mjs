@@ -205,5 +205,28 @@ err = null;
 try { await as(ids.staff, () => q(`insert into gm.share_links (file_id, token, expires_at) select id, 'abc', now() + interval '7 day' from gm.library_files limit 1`)); } catch (e) { err = e; }
 check('사내 전용 자료는 외부 공유 링크를 못 만듦', !!err);
 
+// 008: 사진 전용 앱
+await q(`update gm.project_members set can_field = true where project_id=$1 and user_id=$2`, [pid, ids.field]);
+const ph = await asCommit(ids.field, async () => (await q(`insert into gm.photos (project_id, storage_path, taken_at, uploaded_by, kind) values ($1, $2, '2026-11-05T23:30:00+09:00', $3, '시공 전'), ($1, $2 || 'b', '2026-11-06T00:30:00+09:00', $3, '시공 후') returning id, taken_day::text`, [pid, pid + '/photos/x.jpg', ids.field])).rows);
+check('촬영일은 한국 시간 기준', ph[0].taken_day === '2026-11-05' && ph[1].taken_day === '2026-11-06');
+const days = (await as(ids.staff, () => q(`select * from gm.photo_days($1)`, [pid]))).rows;
+check('날짜별 묶음 2일', days.length === 2 && days[0].n === 1);
+check('타사 직원은 날짜 목록도 비어 있음', (await as(ids.other, () => q(`select * from gm.photo_days($1)`, [pid]))).rowCount === 0);
+const pp = (await as(ids.field, () => q(`select * from gm.photo_projects()`))).rows;
+check('프로젝트별 사진 수', pp.length === 1 && pp[0].n === 2 && pp[0].cover);
+err = null;
+try { await as(ids.field, () => q(`insert into gm.photos (project_id, storage_path, uploaded_by) values ($1,'x',$2)`, [pid, ids.staff])); } catch (e) { err = e; }
+check('남의 이름으로는 못 올림', !!err);
+const ph2 = await asCommit(ids.admin, async () => (await q(`insert into gm.photos (project_id, storage_path, uploaded_by) values ($1,'y',$2) returning id`, [pid, ids.admin])).rows[0].id);
+check('현장은 남이 올린 사진을 못 지움', (await as(ids.field, () => q(`delete from gm.photos where id=$1 returning id`, [ph2]))).rowCount === 0);
+check('현장은 자기 사진 정보를 고침', (await as(ids.field, () => q(`update gm.photos set caption='P2 받침' where id=$1 returning id`, [ph[0].id]))).rowCount === 1);
+check('본사는 모든 사진을 지움', (await as(ids.staff, () => q(`delete from gm.photos where id=$1 returning id`, [ph[0].id]))).rowCount === 1);
+const sh = await asCommit(ids.field, async () => (await q(`insert into gm.photo_sheets (project_id, title, per_page, items) values ($1,'받침 교체 사진대지',3,$2) returning id`, [pid, JSON.stringify([{ photo_id: ph[1].id, caption: 'P2' }])])).rows[0].id);
+check('사진대지는 본사도 봄', (await as(ids.staff, () => q(`select * from gm.photo_sheets where id=$1`, [sh]))).rowCount === 1);
+check('타사는 사진대지 못 봄', (await as(ids.other, () => q(`select * from gm.photo_sheets`))).rowCount === 0);
+err = null;
+try { await as(ids.field, () => q(`update gm.photo_sheets set per_page=5 where id=$1`, [sh])); } catch (e) { err = e; }
+check('한 쪽 사진 수는 2·3·4·6만', !!err);
+
 await c.end();
 await db.stop();

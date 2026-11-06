@@ -234,3 +234,93 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 .paper .indent { padding-left: 14px; grid-template-columns: 176px 1fr; }
 .paper .date { text-align: center; font-weight: 700; margin: 28px 0 18px; font-size: 16px; }
 .paper .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; } .paper .sign .rowx { grid-template-columns: 90px 1fr; }
+
+/* ---------- 사진 전용 앱 (GM 사진) ---------- */
+.papp { min-height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+.phead { background: var(--blue); color: #fff; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 20; }
+.phead h1 { font-size: 17px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phead .ib, .pview .ib { min-width: 44px; height: 44px; border-radius: 8px; background: rgba(255,255,255,.14); color: #fff; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; border: 0; font-size: 18px; cursor: pointer; padding: 0 10px; }
+.phead .ib.wide, .pview .ib.wide { font-size: 14px; font-weight: 700; }
+.phead .ib[aria-pressed=true] { background: var(--orange); color: var(--orange-t); }
+.phead .saved { font-size: 12px; color: #D6E2F3; }
+.pbody { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 14px 16px 110px; display: flex; flex-direction: column; gap: 12px; }
+.pproj { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pcard { background: #fff; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; text-decoration: none; color: var(--text); display: flex; flex-direction: column; }
+.pcard:hover { border-color: var(--blue); }
+.pcard .cover { aspect-ratio: 16/9; background: var(--blue-l); display: flex; align-items: center; justify-content: center; font-size: 40px; position: relative; overflow: hidden; }
+.pcard .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 560px) { .pproj { grid-template-columns: 1fr; gap: 8px; } .pcard { flex-direction: row; align-items: center; } .pcard .cover { width: 96px; flex: none; aspect-ratio: 1; font-size: 28px; } }
+.pcard .meta { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; } .pcard .meta span { color: var(--sub); font-size: 13px; }
+.pdays { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.pdays button { flex: none; height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--input); background: #fff; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.pdays button small { color: var(--sub-2); margin-left: 2px; }
+.pdays button.on { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 700; } .pdays button.on small { color: #D6E2F3; }
+.pfilter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .pfilter { grid-template-columns: 1fr 1fr; } .pfilter select:first-child { grid-column: 1 / -1; } }
+.pday { display: flex; flex-direction: column; gap: 8px; }
+.pday-h { display: flex; align-items: center; gap: 10px; position: sticky; top: 64px; z-index: 5; background: var(--bg); padding: 6px 0; }
+.modal .pday-h { position: static; background: none; }
+.pday-h h2 { font-size: 16px; } .pday-h .btn { margin-left: auto; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 4px; }
+@media (max-width: 560px) { .pgrid { grid-template-columns: repeat(3, 1fr); } }
+.ptile { aspect-ratio: 1; position: relative; border: 0; padding: 0; background: #DDE3EC; border-radius: 6px; overflow: hidden; cursor: pointer; }
+.ptile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ptile .k { position: absolute; left: 4px; bottom: 4px; background: rgba(20,36,61,.78); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+.ptile .ck { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 13px; border: 2px solid #fff; background: rgba(0,0,0,.25); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.ptile.on { outline: 4px solid var(--blue); outline-offset: -4px; } .ptile.on .ck { background: var(--blue); }
+.ptile.on img { opacity: .82; } .ptile.dim img { opacity: .45; }
+.pfab { position: fixed; right: 20px; bottom: calc(24px + env(safe-area-inset-bottom)); height: 60px; padding: 0 24px; border-radius: 30px; border: 0; background: var(--blue); color: #fff; font-size: 17px; font-weight: 700; box-shadow: 0 6px 20px rgba(31,78,140,.35); cursor: pointer; z-index: 15; }
+.pbar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 15; box-shadow: 0 -4px 16px rgba(0,0,0,.06); }
+.pbar b { margin-right: auto; font-size: 16px; }
+.pqueue { display: flex; gap: 6px; overflow-x: auto; padding: 2px; }
+.pqueue .q { flex: none; width: 76px; height: 76px; position: relative; border-radius: 8px; overflow: hidden; background: #DDE3EC; }
+.pqueue .q img { width: 100%; height: 100%; object-fit: cover; }
+.pqueue .q.done img { opacity: .55; } .pqueue .q.fail { outline: 3px solid var(--red-s); outline-offset: -3px; }
+.pqueue .q .st { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.pqueue .q button { position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 13px; border: 0; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; }
+.pview { position: fixed; inset: 0; background: #0B1220; z-index: 60; display: flex; flex-direction: column; color: #fff; }
+.pview .top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; padding-top: max(8px, env(safe-area-inset-top)); flex-wrap: wrap; }
+.pview .stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.pview .stage img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; }
+.pview .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 72px; border: 0; background: rgba(255,255,255,.12); color: #fff; font-size: 34px; cursor: pointer; border-radius: 8px; }
+.pview .nav.prev { left: 8px; } .pview .nav.next { right: 8px; }
+.pview .info { padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); background: rgba(20,36,61,.92); display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+
+/* 사진대지 */
+.slist { display: flex; flex-direction: column; gap: 8px; }
+.sitem { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.sitem a { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: var(--text); min-height: 44px; justify-content: center; }
+.sitem a:hover b { color: var(--blue); }
+.sheet-tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+.sheet-wrap { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .sheet-wrap { grid-template-columns: 1fr; } }
+.sheet-list { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 200px); overflow-y: auto; position: sticky; top: 76px; }
+.sli { display: grid; grid-template-columns: 22px 64px 1fr auto; gap: 8px; align-items: center; border-top: 1px solid var(--line-2); padding-top: 8px; }
+.sli .no { color: var(--sub-2); font-size: 12px; text-align: center; }
+.sli img { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; }
+.sli .txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; } .sli .txt .input { height: 38px; }
+.sli .ops { display: flex; flex-direction: column; gap: 2px; } .sli .ops .btn { width: 36px; padding: 0; height: 30px; }
+.sheet-print { display: flex; flex-direction: column; gap: 16px; align-items: center; min-width: 0; overflow-x: auto; }
+.a4 { width: 210mm; height: 297mm; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.12); padding: 12mm 12mm 10mm; display: flex; flex-direction: column; gap: 3mm; color: #000; flex: none; font-size: 10.5pt; }
+.a4-h { text-align: center; font-size: 20pt; letter-spacing: .3em; padding: 2mm 0; border-bottom: 2px solid #000; }
+.a4-meta, .a4 .blk table { width: 100%; border-collapse: collapse; }
+.a4-meta th, .a4-meta td, .a4 .blk th, .a4 .blk td { border: 1px solid #000; padding: 1.5mm 2mm; text-align: left; font-weight: 400; }
+.a4-meta th, .a4 .blk th { width: 18mm; background: #F2F2F2; text-align: center; white-space: nowrap; }
+.a4-meta td.num { width: 22mm; text-align: center; }
+.a4-grid { flex: 1; min-height: 0; display: grid; gap: 3mm; }
+.a4 .blk { display: flex; flex-direction: column; min-height: 0; border: 1px solid #000; }
+.a4 .blk .img { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 1.5mm; }
+.a4 .blk .img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.a4 .blk table { margin: 0; } .a4 .blk tr:first-child th, .a4 .blk tr:first-child td { border-top: 1px solid #000; }
+.a4 .blk th, .a4 .blk td { border-left: 0; border-bottom: 0; } .a4 .blk td { border-right: 0; }
+.a4.per4 .blk th, .a4.per6 .blk th { width: 13mm; } .a4.per6 { font-size: 9.5pt; }
+@media (max-width: 900px) { .a4 { zoom: .5; } }
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  body { background: #fff; }
+  .phead, .no-print, .toast { display: none !important; }
+  .pbody { padding: 0; max-width: none; display: block; }
+  .sheet-wrap { display: block; } .sheet-print { display: block; gap: 0; overflow: visible; }
+  .a4 { box-shadow: none; zoom: 1; page-break-after: always; break-after: page; margin: 0; }
+  .a4:last-child { page-break-after: auto; break-after: auto; }
+}

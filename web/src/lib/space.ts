@@ -1,4 +1,5 @@
 // 회사 공용공간 공통 (space-files 버킷)
+import { safe } from './files';
 import { sb, q } from './supabase';
 
 export const SPACE = 'space-files';
@@ -12,7 +13,6 @@ export const SUBFOLDERS: Record<string, string[]> = {
 };
 export const CATS: Record<string, string> = { 전사: '#1F4E8C', 교육: '#5B3A99', 현장: '#0F6E61', 마감: '#C62828', 회사: '#8A4B00' };
 
-const safe = (n: string) => n.replace(/[^\w.\-가-힣]+/g, '_').slice(-80);
 export async function spaceUpload(area: 'board' | 'library', file: File) {
   const { data } = await sb.auth.getUser();
   const path = `${area}/${data.user!.id}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${safe(file.name)}`;

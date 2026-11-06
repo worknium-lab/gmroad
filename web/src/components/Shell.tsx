@@ -22,7 +22,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const groups: { head: string; lock?: boolean; items: Item[] }[] = [
     { head: '', items: [{ to: '/', label: '홈' }] },
     { head: '프로젝트', items: [{ to: '/projects', label: '프로젝트 목록 · 통계', match: '/projects' }] },
-    { head: '현장', items: [{ to: '/field', label: '현장 앱 열기' }] },
+    { head: '현장', items: [{ to: '/field', label: '현장 앱 열기' }, { to: '/photos', label: '사진 앱 (GM 사진)' }] },
     { head: '회사 공용공간', items: [{ to: '/space', label: '공용공간 홈' }, { to: '/space/board', label: '게시판', match: '/space/board' }, { to: '/space/library', label: '자료실' }, { to: '/space/calendar', label: '회사 일정' }, { to: '/space/directory', label: '사내 연락처' }] },
     { head: '내 정보', items: [{ to: '/me', label: '인사정보 · 비밀번호' }] },
   ];

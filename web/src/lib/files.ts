@@ -14,13 +14,22 @@ export async function compressImage(file: File, max = 2000): Promise<Blob> {
   } catch { return file; }
 }
 
-const safe = (n: string) => n.replace(/[^\w.\-가-힣]+/g, '_').slice(-80);
+/** 저장소 키는 영문 · 숫자만 됨 (수파베이스 저장소가 한글 키를 거부함). 보이는 이름은 DB에 따로 저장 */
+export const safe = (n: string) => {
+  const dot = n.lastIndexOf('.');
+  const ext = dot > 0 ? n.slice(dot).replace(/[^A-Za-z0-9.]/g, '').slice(0, 10) : '';
+  const base = (dot > 0 ? n.slice(0, dot) : n).replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(-60);
+  return (base || 'file') + ext;
+};
+/** 폴더 이름: 영문이면 그대로, 한글 등이 섞이면 짧은 고정 코드로 (예: docs/계약서 → docs/c_1k3z9q) */
+const seg = (s: string) => /^[A-Za-z0-9._-]+$/.test(s) ? s : 'c_' + [...new TextEncoder().encode(s)].reduce((h, b) => Math.imul(h ^ b, 16777619) >>> 0, 2166136261).toString(36);
+const safeFolder = (f: string) => f.split('/').filter(Boolean).map(seg).join('/');
 
 /** 경로 규칙: {project_id}/{분류}/{시각}_{파일명} */
 export async function upload(projectId: string, folder: string, file: File | Blob, name?: string, image = false) {
   const body = image && file instanceof File ? await compressImage(file) : file;
   const fname = safe(name || (file as File).name || 'file');
-  const path = `${projectId}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${image ? fname.replace(/\.\w+$/, '.jpg') : fname}`;
+  const path = `${projectId}/${safeFolder(folder)}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${image ? fname.replace(/\.\w+$/, '.jpg') : fname}`;
   const { error } = await sb.storage.from(BUCKET).upload(path, body, { contentType: image ? 'image/jpeg' : (file as File).type || undefined, upsert: false });
   if (error) throw new Error(error.message);
   return { path, size: body.size };

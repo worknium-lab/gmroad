@@ -6,6 +6,7 @@ import { admin, idToEmail, tempPassword } from './lib.mjs';
 import { boqRoutes } from './boq/routes.mjs';
 import { meetingRoutes } from './meetings/routes.mjs';
 import { laborRoutes } from './labor/routes.mjs';
+import { photoRoutes } from './photos/routes.mjs';
 import { spaceRoutes, shareDownload, startSpaceWorker } from './space/routes.mjs';
 import { resume } from './meetings/process.mjs';
 
@@ -68,6 +69,7 @@ const routes = {
   ...meetingRoutes,
   ...laborRoutes,
   ...spaceRoutes,
+  ...photoRoutes,
 };
 
 http.createServer(async (req, res) => {
