@@ -5,6 +5,7 @@ import http from 'node:http';
 import { admin, idToEmail, tempPassword } from './lib.mjs';
 import { boqRoutes } from './boq/routes.mjs';
 import { meetingRoutes } from './meetings/routes.mjs';
+import { laborRoutes } from './labor/routes.mjs';
 import { resume } from './meetings/process.mjs';
 
 const PORT = Number(process.env.PORT || 3001);
@@ -64,6 +65,7 @@ const routes = {
 
   ...boqRoutes,
   ...meetingRoutes,
+  ...laborRoutes,
 };
 
 http.createServer(async (req, res) => {

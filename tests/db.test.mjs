@@ -163,5 +163,15 @@ check('현장 담당자는 알림칸에 못 올림', !!err);
 const al = (await q(`insert into gm.project_alerts (project_id, kind, text) values ($1,'decision','받침 교체 11/13까지') returning id`, [pid])).rows[0].id;
 check('현장 담당자도 알림을 확인', (await as(ids.field, () => q(`insert into gm.alert_acks (alert_id, user_id) values ($1,$2) returning alert_id`, [al, ids.field]))).rowCount === 1);
 
+// 006: 노무비 — 노무비 권한(can_labor)이 있는 사람만, 확정되면 못 고침
+await q(`insert into gm.labor_workers (project_id, name, birth, acct) values ($1,'김정호','1968-04-12','123-45')`, [pid]);
+check('노무비 권한 없는 직원은 근로자 계좌를 못 봄', (await as(ids.staff, () => q(`select * from gm.labor_workers`))).rowCount === 0);
+check('현장 담당자도 근로자 계좌를 못 봄', (await as(ids.field, () => q(`select * from gm.labor_workers`))).rowCount === 0);
+await q(`update gm.project_members set can_labor = true where project_id=$1 and user_id=$2`, [pid, ids.staff]);
+check('노무비 권한 준 직원은 봄', (await as(ids.staff, () => q(`select * from gm.labor_workers`))).rowCount === 1);
+const lm = await asCommit(ids.staff, async () => (await q(`insert into gm.labor_months (project_id, ym) values ($1,'2026-10') returning id`, [pid])).rows[0].id);
+await asCommit(ids.staff, () => q(`update gm.labor_months set locked = true where id=$1`, [lm]));
+check('확정된 노무비는 화면에서 못 고침', (await as(ids.staff, () => q(`update gm.labor_months set locked=false where id=$1 returning id`, [lm]))).rowCount === 0);
+
 await c.end();
 await db.stop();

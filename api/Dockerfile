@@ -5,5 +5,6 @@ RUN npm ci --omit=dev
 COPY *.mjs ./
 COPY boq ./boq
 COPY meetings ./meetings
+COPY labor ./labor
 EXPOSE 3001
 CMD ["node", "server.mjs"]

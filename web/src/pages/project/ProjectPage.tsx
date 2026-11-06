@@ -13,13 +13,14 @@ import Progress from './Progress';
 import Materials from './Materials';
 import Boq from './Boq';
 import Story from './meeting/Story';
+import Labor from './Labor';
 import ProjectAlerts from './meeting/ProjectAlerts';
 
 const TABS: [string, string, boolean][] = [
   ['overview', '① 개요', false], ['docs', '② 설계·계약서류', false], ['structure', '③ 공사 구성', false], ['boq', '④ 내역서', false], ['construction', '⑤ 공사서류', false],
   ['site', '⑥ 현장 현황', true], ['progress', '⑦ 공정률', true], ['materials', '⑧ 자재', true], ['labor', '⑨ 노무비', true], ['meeting', '⑩ 회의록 · 스토리', true],
 ];
-const NEXT: Record<string, string> = { labor: '노무비 (전자카드 → 명세서 → 근로계약서)' };
+const NEXT: Record<string, string> = {};
 
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams();
@@ -65,6 +66,7 @@ export default function ProjectPage() {
       {tab === 'materials' && <Materials pid={id} />}
       {tab === 'boq' && <Boq pid={id} p={p} />}
       {tab === 'meeting' && <Story pid={id} />}
+      {tab === 'labor' && <Labor pid={id} p={p} />}
       {NEXT[tab] && <div className="empty"><b>{NEXT[tab]}</b><br />다음 단계에서 만듭니다. 화면 설계는 디자인 캔버스에 있습니다.</div>}
 
       {edit && <ProjectForm project={p} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reload(); }} />}
