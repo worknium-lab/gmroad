@@ -5,6 +5,7 @@ import { Evaluator } from './evaluator.mjs';
 import { findBoqSheets, parseBoq } from './detect.mjs';
 import { buildContract } from './contract.mjs';
 import { buildChange } from './change.mjs';
+import { collectRefs } from './refs.mjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const BUCKET = 'project-files';
@@ -74,6 +75,15 @@ async function saveRevision(row, items) {
   }
   return rev;
 }
+async function unitData(rev) {
+  const { data: ucs } = await admin.from('boq_unit_costs').select('*').eq('revision_id', rev.id);
+  const { data: qs } = await admin.from('boq_quotes').select('*').eq('revision_id', rev.id);
+  const { data: cts } = await admin.from('boq_revisions').select('params, created_at').eq('project_id', rev.project_id).eq('kind', 'contract');
+  const ct = (cts || []).filter((c) => c.params?.rate).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+  const bySeq = (a, b) => a.seq - b.seq;
+  return { unitCosts: (ucs || []).sort(bySeq), quotes: (qs || []).sort(bySeq), rate: ct?.params?.rate || null };
+}
+const refsCache = new Map();
 const totalsOf = (t) => Object.fromEntries(Object.entries(t).filter(([, v]) => v).map(([k, v]) => [k, v.amount]));
 
 export const boqRoutes = {
@@ -193,7 +203,8 @@ export const boqRoutes = {
     const edits = cleanEdits(b.edits);
     const newItems = cleanNew(b.new_items);
     let r;
-    try { r = await buildChange(await fileBuf(base.storage_path), { sheet: base.sheet_name, headerRow: base.header_row, mode: 'pair', rule: rev.params.rule, edits, newItems, outName: rev.sheet_name }); }
+    const ud = await unitData(rev);
+    try { r = await buildChange(await fileBuf(base.storage_path), { sheet: base.sheet_name, headerRow: base.header_row, mode: 'pair', rule: rev.params.rule, edits, newItems, outName: rev.sheet_name, ...ud }); }
     catch (e) { throw [400, e.message || String(e)]; }
     await putFile(rev.storage_path, await r.makeFile(), true);
     await admin.from('boq_items').delete().eq('revision_id', rev.id);
@@ -202,7 +213,7 @@ export const boqRoutes = {
     await admin.from('boq_revisions').update({ totals: r.totals, params }).eq('id', rev.id);
     const changed = r.items.filter((x) => x.kind === 'item' && x.change && x.change !== 'same').length;
     await log(rev, me, '저장', null, { changed, contract: r.totals.contract });
-    return { totals: r.totals, orig_totals: r.origTotals, checks: r.checks, changed };
+    return { totals: r.totals, orig_totals: r.origTotals, checks: r.checks, changed, uc_prices: r.ucPrices };
   },
 
   // 확정: 도급 → 잠금 / 변경 → 잠금 + 준공내역서 생성
@@ -218,13 +229,13 @@ export const boqRoutes = {
       return { ok: true };
     }
     if (rev.kind !== 'change') throw [400, '확정할 수 없는 내역서입니다'];
-    const bad = (rev.params.checks || []).filter((c) => !c.ok);
+    const bad = (rev.params.checks || []).filter((c) => !c.ok && !c.warn);
     if (bad.length) throw [400, '확정 전 검사를 통과하지 못했습니다: ' + bad.map((c) => c.label).join(', ')];
     const { data: base } = await admin.from('boq_revisions').select('*').eq('id', rev.base_id).single();
     const { count } = await admin.from('boq_revisions').select('id', { count: 'exact', head: true }).eq('project_id', rev.project_id).eq('kind', 'final');
     const n = (count || 0) + 1;
     const r = await buildChange(await fileBuf(base.storage_path), {
-      sheet: base.sheet_name, headerRow: base.header_row, mode: 'single', edits: rev.params.edits || {}, newItems: rev.params.new_items || [], outName: `준공내역서 v${n}`,
+      sheet: base.sheet_name, headerRow: base.header_row, mode: 'single', edits: rev.params.edits || {}, newItems: rev.params.new_items || [], outName: `준공내역서 v${n}`, ...(await unitData(rev)),
     });
     const path = `${rev.project_id}/boq/${Date.now()}_final${n}.xlsx`;
     await putFile(path, await r.makeFile());
@@ -278,6 +289,20 @@ export const boqRoutes = {
     return { ok: true };
   },
 
+  // 일위대가 작성용 단가 자료 (기준 엑셀의 자재 · 노임 · 목록 · 호표)
+  'POST /api/boq/refs': async (me, b) => {
+    const { data: rev } = await admin.from('boq_revisions').select('*').eq('id', b.revision_id).single();
+    if (!rev) throw [404, '없습니다'];
+    await canBoq(me, rev.project_id);
+    const { data: base } = await admin.from('boq_revisions').select('*').eq('id', rev.base_id || rev.id).single();
+    const src = base || rev;
+    if (refsCache.has(src.storage_path)) return refsCache.get(src.storage_path);
+    const model = await readWorkbook(await fileBuf(src.storage_path));
+    const out = collectRefs(model, new Evaluator(model), [src.sheet_name]);
+    refsCache.set(src.storage_path, out); if (refsCache.size > 6) refsCache.delete(refsCache.keys().next().value);
+    return out;
+  },
+
   // 발주처 규칙 저장
   'POST /api/boq/rule': async (me, b) => {
     const p = await canBoq(me, b.project_id);
@@ -306,6 +331,7 @@ function cleanEdits(e = {}) {
     if (!/^\d+$/.test(row)) continue;
     const y = {};
     for (const k of ['qty', 'mat_price', 'lab_price', 'exp_price']) { const v = numOrNull(x?.[k]); if (v !== undefined) y[k] = k === 'qty' ? v : Math.trunc(v); }
+    if (/^[\w-]{1,64}$/.test(String(x?.unit_cost_id || ''))) y.unit_cost_id = String(x.unit_cost_id);
     if (Object.keys(y).length) out[row] = y;
   }
   return out;
@@ -314,6 +340,7 @@ function cleanNew(list = []) {
   return (list || []).slice(0, 500).map((x, k) => ({
     id: String(x.id || k), parent_row: Math.trunc(Number(x.parent_row)), name: String(x.name || '').slice(0, 200).trim() || '(이름 없음)',
     spec: String(x.spec || '').slice(0, 200), unit: String(x.unit || '').slice(0, 20), note: String(x.note || '').slice(0, 100),
+    ...(/^[\w-]{1,64}$/.test(String(x.unit_cost_id || '')) ? { unit_cost_id: String(x.unit_cost_id) } : {}),
     qty: numOrNull(x.qty) ?? 0, mat_price: Math.trunc(numOrNull(x.mat_price) ?? 0), lab_price: Math.trunc(numOrNull(x.lab_price) ?? 0), exp_price: Math.trunc(numOrNull(x.exp_price) ?? 0),
   }));
 }

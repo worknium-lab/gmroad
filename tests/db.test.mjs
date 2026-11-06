@@ -133,5 +133,16 @@ await q(`insert into gm.boq_logs (project_id, action) values ($1, '확정')`, [p
 check('내역서 권한자는 이력을 봄', (await as(ids.staff, () => q(`select * from gm.boq_logs`))).rowCount === 1);
 check('타사 직원은 이력을 못 봄', (await as(ids.other, () => q(`select * from gm.boq_logs`))).rowCount === 0);
 
+// 004: 일위대가는 작성 중 변경내역서에만, 내역서 권한 있는 직원이 씀
+const chg = (await q(`insert into gm.boq_revisions (project_id, kind, title, storage_path, file_name, sheet_name, header_row, col_map) values ($1,'change','1차 변경','x','x.xlsx','변경',2,'{}') returning id`, [pid])).rows[0].id;
+check('권한 직원은 작성 중 변경내역서에 일위대가를 씀', (await as(ids.staff, () => q(`insert into gm.boq_unit_costs (project_id, revision_id, name) values ($1,$2,'받침 보강') returning id`, [pid, chg]))).rowCount === 1);
+err = null;
+try { await as(ids.field, () => q(`insert into gm.boq_unit_costs (project_id, revision_id, name) values ($1,$2,'x')`, [pid, chg])); } catch (e) { err = e; }
+check('현장 담당자는 일위대가를 못 씀', !!err);
+await q(`update gm.boq_revisions set locked = true, status = 'confirmed' where id = $1`, [chg]);
+err = null;
+try { await as(ids.staff, () => q(`insert into gm.boq_quotes (project_id, revision_id, name) values ($1,$2,'앵커')`, [pid, chg])); } catch (e) { err = e; }
+check('확정된 변경내역서에는 단가산출서를 못 씀', !!err);
+
 await c.end();
 await db.stop();

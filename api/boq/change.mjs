@@ -12,6 +12,7 @@ import JSZip from 'jszip';
 import { readWorkbook, sheetFiles, finishZip, colToNum, numToCol, splitAddr, encode, decode } from './xlsx.mjs';
 import { Evaluator } from './evaluator.mjs';
 import { parseBoq } from './detect.mjs';
+import { parseSheetRef, sheetRef } from './refs.mjs';
 
 export const COLORS = { black: null, red: 'FFFF0000', blue: 'FF0000FF' };
 const clean = (x) => Number(x.toPrecision(15));
@@ -109,10 +110,13 @@ function styleTool(xml) {
  * opt: { sheet, headerRow, mode: 'pair'|'single', outName, title,
  *        rule: { top: 'change'|'orig', orig_color, chg_color, merge_text },
  *        edits: { [기준행]: { qty?, mat_price?, lab_price?, exp_price? } },
- *        newItems: [{ id, parent_row, after_row?, name, spec, unit, qty, mat_price, lab_price, exp_price, note }] }
+ *        newItems: [{ id, parent_row, after_row?, name, spec, unit, qty, mat_price, lab_price, exp_price, note, unit_cost_id? }],
+ *        unitCosts: 신규 일위대가 [{ id, seq, name, spec, unit, basis, apply_rate, lines: [{ name, spec, unit, qty, mat|lab|exp: { v?, f?, quote? }, src }] }],
+ *        quotes: 단가산출서 [{ id, seq, name, spec, unit, sources: [{ label, price, ref }], method: min|avg|pick, pick }], rate: 낙찰률 }
+ *  edits[행].unit_cost_id / 신규 항목 unit_cost_id 가 있으면 변경 단가 = '신규 일위대가' 시트의 적용 단가 칸 수식
  */
 export async function buildChange(buf, opt) {
-  const { sheet, headerRow, mode = 'pair', rule = {}, edits = {}, newItems = [] } = opt;
+  const { sheet, headerRow, mode = 'pair', rule = {}, edits = {}, newItems = [], unitCosts = [], quotes = [], rate = null } = opt;
   const pair = mode === 'pair';
   const topIsChange = (rule.top || 'change') === 'change';
   const merge = pair && rule.merge_text !== false;
@@ -184,6 +188,86 @@ export async function buildChange(buf, opt) {
   const a1 = base.cells.get('A1')?.v;
   if (typeof a1 === 'string' && /내\s*역\s*서/.test(a1)) put('A1', { v: t1, f: undefined });
 
+  // 2-1) 신규 일위대가 · 단가산출서 시트 (새 시트, 내역서의 변경 단가가 여기를 가리킴)
+  const taken = new Set([...files.map((f) => f.name), outName]);
+  const uniq = (nm) => { let x = nm; for (let k = 2; taken.has(x); k++) x = `${nm} (${k})`; taken.add(x); return x; };
+  // 일위대가 줄의 단가 수식은 '다른 시트 칸 하나'만 허용 (자재!D5 같은)
+  for (const uc of unitCosts) for (const ln of uc.lines || []) for (const k of ['mat', 'lab', 'exp']) {
+    const pv = ln[k]; if (!pv?.f) continue;
+    const ref = parseSheetRef(pv.f);
+    if (!ref || !files.some((f) => f.name === ref.sheet)) throw new Error(`일위대가 '${uc.name}'의 '${ln.name}' 단가 출처를 찾을 수 없습니다 (${pv.f})`);
+    pv.f = sheetRef(ref.sheet, ref.a);
+  }
+  const ucName = unitCosts.length ? uniq('신규 일위대가') : null;
+  const qsName = quotes.length ? uniq('신규 단가산출') : null;
+  const tplItem = items.find((x) => x.kind === 'item')?.row ?? first;
+  const tplGroup = items.find((x) => x.kind === 'group')?.row ?? tplItem;
+  const S = (col, r) => lay.styles.get(col + r) ?? '0';
+  const sty = {
+    title: S('A', 1), hdr: S(cm.name, headerRow), hdrN: S(cm.matPrice || cm.qty, headerRow),
+    text: S(cm.name, tplItem), spec: S(cm.spec || cm.name, tplItem), qty: S(cm.qty, tplItem), unit: S(cm.unit, tplItem), price: S(cm.matPrice || cm.qty, tplItem), amt: S(cm.matAmt || cm.qty, tplItem),
+    gText: S(cm.name, tplGroup), gAmt: S(cm.matAmt || cm.qty, tplGroup), note: S(cm.note || cm.name, tplItem),
+  };
+  const qref = (nm) => `'${nm.replace(/'/g, "''")}'!`;
+  const qsCells = new Map(), qRow = new Map();
+  if (qsName) {
+    qsCells.set('A1', { v: '신 규 단 가 산 출 서', s: sty.title });
+    ['품    명', '규    격', '단 위', '물가정보', '거래가격', '견    적', '적용기준', '적용단가', '출처 · 비고'].forEach((h, i) => qsCells.set(numToCol(i + 1) + 2, { v: h, s: i >= 3 && i <= 7 ? sty.hdrN : sty.hdr }));
+    quotes.forEach((qt, i) => {
+      const r = 3 + i; qRow.set(qt.id, r);
+      qsCells.set('A' + r, { v: qt.name, s: sty.text }); qsCells.set('B' + r, { v: qt.spec || null, s: sty.spec }); qsCells.set('C' + r, { v: qt.unit || null, s: sty.unit });
+      ['D', 'E', 'F'].forEach((c, k) => { const v = qt.sources?.[k]?.price; qsCells.set(c + r, { v: v === null || v === undefined || v === '' ? null : Number(v), s: sty.price }); });
+      const m = qt.method === 'avg' ? '평균' : qt.method === 'pick' ? '직접 선택' : '최저가';
+      qsCells.set('G' + r, { v: m, s: sty.unit });
+      const f = qt.method === 'avg' ? `IF(COUNT(D${r}:F${r})=0,0,TRUNC(AVERAGE(D${r}:F${r}),0))` : qt.method === 'pick' ? `${'DEF'[Math.min(2, Math.max(0, qt.pick || 0))]}${r}` : `MIN(D${r}:F${r})`;
+      qsCells.set('H' + r, { f, s: sty.price });
+      qsCells.set('I' + r, { v: (qt.sources || []).map((x, k) => (x?.ref ? `${['물가정보', '거래가격', '견적'][k]}: ${x.ref}` : '')).filter(Boolean).join(' / ') || null, s: sty.note });
+    });
+  }
+  const ucCells = new Map(), ucTarget = new Map();
+  let ucLast = 3;
+  if (ucName) {
+    ucCells.set('A1', { v: '신 규 일 위 대 가', s: sty.title });
+    ucCells.set('K1', { v: '낙찰률', s: sty.hdr }); ucCells.set('L1', { v: rate || 1, s: sty.price });
+    ['공 종 명', '규    격', '수 량', '단 위', '합계 단가', '합계 금액', '재료비 단가', '재료비 금액', '노무비 단가', '노무비 금액', '경비 단가', '경비 금액', '비    고'].forEach((h, i) => ucCells.set(numToCol(i + 1) + 2, { v: h, s: i >= 2 && i <= 11 ? sty.hdrN : sty.hdr }));
+    let r = 4;
+    for (const uc of unitCosts) {
+      const h = r; const lines = uc.lines || [];
+      const L = lines.map((_, k) => h + 1 + k);
+      const sum = (col) => (L.length ? `TRUNC(${L.map((x) => col + x).join('+')},0)` : '0');
+      ucCells.set('A' + h, { v: `신규 ${uc.seq}  ${uc.name}`, s: sty.gText }); ucCells.set('B' + h, { v: uc.spec || null, s: sty.spec });
+      ucCells.set('C' + h, { v: 1, s: sty.qty }); ucCells.set('D' + h, { v: uc.unit || null, s: sty.unit });
+      for (const c of ['H', 'J', 'L']) ucCells.set(c + h, { f: sum(c), s: sty.gAmt });
+      ucCells.set('F' + h, { f: `H${h}+J${h}+L${h}`, s: sty.gAmt });
+      ucCells.set('M' + h, { v: uc.basis || null, s: sty.note });
+      lines.forEach((ln, k) => {
+        const x = L[k];
+        ucCells.set('A' + x, { v: ln.name || '', s: sty.text }); ucCells.set('B' + x, { v: ln.spec || null, s: sty.spec });
+        ucCells.set('C' + x, { v: Number(ln.qty) || 0, s: sty.qty }); ucCells.set('D' + x, { v: ln.unit || null, s: sty.unit });
+        [['G', 'mat'], ['I', 'lab'], ['K', 'exp']].forEach(([c, key]) => {
+          const pv = ln[key] || {};
+          const cell = pv.quote && qRow.has(pv.quote) ? { f: `${qref(qsName)}H${qRow.get(pv.quote)}` } : pv.f ? { f: pv.f } : { v: Number(pv.v) || 0 };
+          ucCells.set(c + x, { ...cell, s: sty.price });
+        });
+        ucCells.set('H' + x, { f: `TRUNC(G${x}*C${x},0)`, s: sty.amt }); ucCells.set('J' + x, { f: `TRUNC(I${x}*C${x},0)`, s: sty.amt }); ucCells.set('L' + x, { f: `TRUNC(K${x}*C${x},0)`, s: sty.amt });
+        ucCells.set('E' + x, { f: `G${x}+I${x}+K${x}`, s: sty.price }); ucCells.set('F' + x, { f: `H${x}+J${x}+L${x}`, s: sty.amt });
+        ucCells.set('M' + x, { v: ln.src || null, s: sty.note });
+      });
+      const a = h + 1 + lines.length;
+      const useRate = uc.apply_rate !== false && rate;
+      ucCells.set('A' + a, { v: useRate ? '  적용 단가 (낙찰률 적용)' : '  적용 단가', s: sty.text });
+      ucCells.set('C' + a, { v: 1, s: sty.qty }); ucCells.set('D' + a, { v: uc.unit || null, s: sty.unit });
+      [['G', 'H'], ['I', 'J'], ['K', 'L']].forEach(([pc, ac]) => ucCells.set(pc + a, { f: useRate ? `TRUNC(${ac}${h}*$L$1,0)` : `${ac}${h}`, s: sty.price }));
+      ucCells.set('E' + a, { f: `G${a}+I${a}+K${a}`, s: sty.price });
+      ucTarget.set(uc.id, a);
+      r = a + 2; ucLast = a;
+    }
+  }
+  const linked = new Set();
+  const linkKey = { [cm.matPrice]: 'G', [cm.labPrice]: 'I', [cm.expPrice]: 'K' };
+  const linkPrice = (pc, row, ucId) => { put(pc + row, { v: undefined, f: `${qref(ucName)}${linkKey[pc]}${ucTarget.get(ucId)}` }); linked.add(pc + row); };
+  const hasUc = (id) => id && ucName && ucTarget.has(id);
+
   // 3) 기준 행 → 당초 / 변경 줄
   let labeled = false;
   for (let r = first; r <= maxRow; r++) {
@@ -212,7 +296,8 @@ export async function buildChange(buf, opt) {
           else if (!pair || !base.cells.get(cm.qty + r)?.f) put(q, { f: undefined, v: evv(cm.qty + r) });
           for (const pc of priceCols) {
             const ek = e[keyOf[pc]];
-            if (ek !== undefined && ek !== null && ek !== '') put(pc + nr, { f: undefined, v: Math.trunc(Number(ek)) });
+            if (hasUc(e.unit_cost_id)) linkPrice(pc, nr, e.unit_cost_id);
+            else if (ek !== undefined && ek !== null && ek !== '') put(pc + nr, { f: undefined, v: Math.trunc(Number(ek)) });
             else if (pair) put(pc + nr, { v: undefined, f: pc + O.get(r) });
             else put(pc + nr, { f: undefined, v: evv(pc + r) ?? 0 });
           }
@@ -247,6 +332,7 @@ export async function buildChange(buf, opt) {
         else if (col === cm.unit && showText) cell.v = ni.unit || null;
         else if (col === cm.note && isC) cell.v = ni.note || '신규';
         else if (isC && col === cm.qty) cell.v = Number(ni.qty) || 0;
+        else if (isC && priceCols.includes(col) && hasUc(ni.unit_cost_id)) { cell = { s, f: `${qref(ucName)}${linkKey[col]}${ucTarget.get(ni.unit_cost_id)}` }; linked.add(col + row); }
         else if (isC && priceCols.includes(col)) cell.v = Math.trunc(Number(ni[keyOf[col]]) || 0);
         else if (isC && formCols.has(col) && x?.f) cell = { s, f: remapFormula(localize(x.f), (rr) => (rr === tpl ? nr : mapC(rr))) };
         put(col + row, cell);
@@ -289,10 +375,16 @@ export async function buildChange(buf, opt) {
   }
 
   // 6) 계산 (새 시트를 모델에 넣고 엑셀과 같은 계산기로)
+  const toModel = (cs) => { const m = new Map(); for (const [a, x] of cs) if (x.f || (x.v !== null && x.v !== undefined)) m.set(a, { v: x.v ?? null, f: x.f || null }); return m; };
+  if (qsName) model.sheets.push({ name: qsName, path: null, cells: toModel(qsCells) });
+  if (ucName) model.sheets.push({ name: ucName, path: null, cells: toModel(ucCells) });
+  for (const [nm, cs] of [[qsName, qsCells], [ucName, ucCells]]) if (nm) for (const [a, x] of cs) if (x.f) { const v = ev.value(nm, a); x.v = typeof v === 'number' ? clean(v) : v; }
   const sheetCells = new Map();
   for (const [a, x] of cells) if (x.f || (x.v !== null && x.v !== undefined)) sheetCells.set(a, { v: x.v ?? null, f: x.f || null });
   model.sheets.push({ name: outName, path: null, cells: sheetCells });
   for (const [a, x] of cells) if (x.f) { const v = ev.value(outName, a); x.v = typeof v === 'number' ? clean(v) : v; }
+  // 준공내역서(한 줄)는 단가를 값으로: 일위대가에 연결된 단가도 계산값으로 바꿈
+  if (!pair) for (const a of linked) { const x = cells.get(a); x.f = undefined; sheetCells.get(a).f = null; }
 
   // 7) 결과 정리
   const n = (col, row) => { if (!col || row == null) return null; const v = ev.value(outName, col + row); return typeof v === 'number' ? clean(v) : null; };
@@ -318,7 +410,7 @@ export async function buildChange(buf, opt) {
 
   // 확정 전 검사
   const checks = [];
-  const badNew = newItems.filter((ni) => !(Number(ni.qty) > 0) || !['mat_price', 'lab_price', 'exp_price'].some((k) => Number(ni[k]) > 0));
+  const badNew = newItems.filter((ni) => !(Number(ni.qty) > 0) || !(hasUc(ni.unit_cost_id) || ['mat_price', 'lab_price', 'exp_price'].some((k) => Number(ni[k]) > 0)));
   checks.push({ label: '신규 항목에 수량 · 단가가 모두 있음', ok: !badNew.length, detail: badNew.map((x) => x.name).join(', ') });
   const nonInt = out.filter((x) => [x.mat_amt, x.lab_amt, x.exp_amt].some((v) => !Number.isInteger(v)));
   checks.push({ label: '모든 금액이 원 단위 정수 (TRUNC)', ok: !nonInt.length, detail: nonInt.slice(0, 5).map((x) => x.name).join(', ') });
@@ -328,6 +420,10 @@ export async function buildChange(buf, opt) {
     const linked = items.filter((x) => x.kind === 'item').length;
     checks.push({ label: `변경 단가가 당초 단가 칸이나 입력값에 연결됨 (${linked}개 항목)`, ok: true, detail: '' });
   }
+  const direct = newItems.filter((ni) => !hasUc(ni.unit_cost_id));
+  if (pair) checks.push({ label: '신규 단가가 일위대가 · 단가산출서에 연결됨', ok: !direct.length, warn: true, detail: direct.length ? `직접 입력 ${direct.length}개: ${direct.slice(0, 5).map((x) => x.name).join(', ')}` : '' });
+  const ucZero = unitCosts.filter((uc) => !(uc.lines || []).length);
+  if (ucZero.length) checks.push({ label: '신규 일위대가에 내용이 있음', ok: false, detail: ucZero.map((x) => x.name).join(', ') });
   const sumCheck = totals.contract == null || Number.isInteger(totals.contract);
   checks.push({ label: '원가계산서 다시 계산 완료', ok: sumCheck, detail: '' });
 
@@ -354,28 +450,46 @@ export async function buildChange(buf, opt) {
       rowsXml.push(`<row r="${r}"${rowAttr.get(r) || ''}>${cs}</row>`);
     }
     // 시트 파일 · 관계 · 형식 등록
-    let num = 1; while (z.file(`xl/worksheets/sheet${num}.xml`)) num++;
-    const path = `xl/worksheets/sheet${num}.xml`;
-    z.file(path, h + `<sheetData>${rowsXml.join('')}</sheetData>` + tail);
-    const relsP = 'xl/_rels/workbook.xml.rels';
-    let rels = await z.file(relsP).async('string');
-    let rid = 'rIdGm1'; for (let k = 1; rels.includes(`Id="${rid}"`); k++) rid = 'rIdGm' + k;
-    rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${num}.xml"/></Relationships>`);
-    z.file(relsP, rels);
-    let ct = await z.file('[Content_Types].xml').async('string');
-    ct = ct.replace('</Types>', `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
-    z.file('[Content_Types].xml', ct);
+    const addSheet = async (xml) => {
+      let num = 1; while (z.file(`xl/worksheets/sheet${num}.xml`)) num++;
+      const path = `xl/worksheets/sheet${num}.xml`;
+      z.file(path, xml);
+      const relsP = 'xl/_rels/workbook.xml.rels';
+      let rels = await z.file(relsP).async('string');
+      let rid = 'rIdGm1'; for (let k = 1; rels.includes(`Id="${rid}"`); k++) rid = 'rIdGm' + k;
+      rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${num}.xml"/></Relationships>`);
+      z.file(relsP, rels);
+      let ct = await z.file('[Content_Types].xml').async('string');
+      ct = ct.replace('</Types>', `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+      z.file('[Content_Types].xml', ct);
+      return rid;
+    };
+    const rid = await addSheet(h + `<sheetData>${rowsXml.join('')}</sheetData>` + tail);
+    const cols = (/<cols>[\s\S]*?<\/cols>/.exec(baseXml) || [''])[0];
+    const simpleSheet = (cs, lastCol, lastR, widths) => {
+      const byRow = new Map();
+      for (const [a, x] of cs) { const { row, col } = splitAddr(a); if (!byRow.has(row)) byRow.set(row, []); byRow.get(row).push([col, a, x]); }
+      const rx = [...byRow.keys()].sort((p, q) => p - q).map((r) => `<row r="${r}">${byRow.get(r).sort((p, q) => p[0] - q[0]).map(([, a, x]) => cellXml(a, x)).join('')}</row>`).join('');
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+        + `<dimension ref="A1:${lastCol}${lastR}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>`
+        + (widths || cols) + `<sheetData>${rx}</sheetData><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape"/></worksheet>`;
+    };
+    const extra = [];
+    if (ucName) extra.push([ucName, await addSheet(simpleSheet(ucCells, 'M', ucLast, cols))]);
+    if (qsName) extra.push([qsName, await addSheet(simpleSheet(qsCells, 'I', 2 + quotes.length, '<cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="20" customWidth="1"/><col min="3" max="3" width="7" customWidth="1"/><col min="4" max="8" width="13" customWidth="1"/><col min="9" max="9" width="40" customWidth="1"/></cols>'))]);
     // workbook.xml: 기준 시트 앞에 넣고, 기준 시트는 숨김, 새 시트를 열린 시트로
     let wb = await z.file('xl/workbook.xml').async('string');
     const sheetTags = [...wb.matchAll(/<sheet\b[^>]*\/>/g)].map((m) => m[0]);
     const baseIdx = sheetTags.findIndex((t) => decode(/name="([^"]*)"/.exec(t)[1]) === sheet);
     const maxId = Math.max(...sheetTags.map((t) => +/sheetId="(\d+)"/.exec(t)[1]));
-    const newTag = `<sheet name="${encode(outName).replace(/"/g, '&quot;')}" sheetId="${maxId + 1}" r:id="${rid}"/>`;
+    const tagOf = (nm, id, r) => `<sheet name="${encode(nm).replace(/"/g, '&quot;')}" sheetId="${id}" r:id="${r}"/>`;
+    const newTag = tagOf(outName, maxId + 1, rid) + extra.map(([nm, r], k) => tagOf(nm, maxId + 2 + k, r)).join('');
+    const ins = 1 + extra.length;
     const baseTag = sheetTags[baseIdx];
     const hiddenBase = /state="/.test(baseTag) ? baseTag.replace(/state="[^"]*"/, 'state="hidden"') : baseTag.replace(/\/>$/, ' state="hidden"/>');
     wb = wb.replace(baseTag, newTag + hiddenBase);
-    wb = wb.replace(/localSheetId="(\d+)"/g, (m, k) => `localSheetId="${+k >= baseIdx ? +k + 1 : k}"`);
-    const pt = [...wb.matchAll(/<definedName\b[^>]*name="_xlnm\.Print_Titles"[^>]*localSheetId="(\d+)"[^>]*>([\s\S]*?)<\/definedName>/g)].find((m) => +m[1] === baseIdx + 1);
+    wb = wb.replace(/localSheetId="(\d+)"/g, (m, k) => `localSheetId="${+k >= baseIdx ? +k + ins : k}"`);
+    const pt = [...wb.matchAll(/<definedName\b[^>]*name="_xlnm\.Print_Titles"[^>]*localSheetId="(\d+)"[^>]*>([\s\S]*?)<\/definedName>/g)].find((m) => +m[1] === baseIdx + ins);
     if (pt) {
       const txt = pt[2].replace(new RegExp(`'?${esc(encode(sheet))}'?!`, 'g'), `'${encode(outName)}'!`);
       wb = wb.replace(pt[0], pt[0] + `<definedName name="_xlnm.Print_Titles" localSheetId="${baseIdx}">${txt}</definedName>`);
@@ -388,7 +502,9 @@ export async function buildChange(buf, opt) {
     return z.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   };
 
-  return { outName, cm, items: out, totals, origTotals, checks, rows: { first, last: lastRow }, model, ev, makeFile,
+  const ucPrices = {};
+  if (ucName) for (const [id, a] of ucTarget) ucPrices[id] = { mat: ev.num(ucName, 'G' + a), lab: ev.num(ucName, 'I' + a), exp: ev.num(ucName, 'K' + a) };
+  return { outName, cm, items: out, totals, origTotals, checks, ucPrices, ucName, qsName, rows: { first, last: lastRow }, model, ev, makeFile,
     parseOut: () => parseBoq(model, ev, outName, headerRow) };
 }
 

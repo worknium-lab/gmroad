@@ -5,11 +5,12 @@ import { useAuth } from '../../lib/auth';
 import { download } from '../../lib/files';
 import { dt, mul, qty as fq, won } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg } from '../../lib/ui';
+import { UnitPanel, LinkModal, loadUnits, calcUC, UC, Quote } from './BoqUnitCost';
 
 type Rev = any; type Item = any;
 type Rule = { top: 'change' | 'orig'; orig_color: string; chg_color: string; merge_text: boolean };
-type NewItem = { id: string; parent_row: number; name: string; spec: string; unit: string; qty: any; mat_price: any; lab_price: any; exp_price: any; note?: string };
-type Edit = { qty?: any; mat_price?: any; lab_price?: any; exp_price?: any };
+type NewItem = { id: string; parent_row: number; name: string; spec: string; unit: string; qty: any; mat_price: any; lab_price: any; exp_price: any; note?: string; unit_cost_id?: string };
+type Edit = { qty?: any; mat_price?: any; lab_price?: any; exp_price?: any; unit_cost_id?: string };
 
 export const RULE_DEFAULT: Rule = { top: 'change', orig_color: 'black', chg_color: 'red', merge_text: true };
 const CSS_COLOR: Record<string, string> = { black: 'var(--text)', red: '#C62828', blue: '#1F4E8C' };
@@ -38,7 +39,12 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
   const [news, setNews] = useState<NewItem[]>(() => (rev.params?.new_items || []).map((x: any) => ({ ...x })));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [section, setSection] = useState<'detail' | 'summary'>('detail');
+  const [section, setSection] = useState<'detail' | 'summary' | 'units'>('detail');
+  const [uStamp, setUStamp] = useState(0);
+  const units = useLoad(() => loadUnits(rev.id), [rev.id, uStamp]);
+  const ucs: UC[] = units.data?.ucs || [], qs: Quote[] = units.data?.qs || [];
+  const ucCalc = useMemo(() => new Map(ucs.map((u) => [u.id, calcUC(u, qs, rate)])), [ucs, qs, rate]);
+  const [linkFor, setLinkFor] = useState<Item | null>(null);
   const [onlyChanged, setOnlyChanged] = useState(false);
   const [closed, setClosed] = useState<Record<number, boolean>>({});
   const [addTo, setAddTo] = useState<{ parent: Item; edit?: NewItem } | null>(null);
@@ -48,6 +54,11 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
 
   const all: Item[] = items.data || [];
   const byRow = useMemo(() => new Map(all.map((i) => [i.row, i])), [all]);
+  const used = useMemo(() => new Set<string>([...Object.values(edits).map((e) => e.unit_cost_id!).filter(Boolean), ...news.map((n) => n.unit_cost_id!).filter(Boolean)]), [edits, news]);
+  const setLink = (row: number, id: string | null) => {
+    setEdits((e) => { const x: Edit = { ...(e[row] || {}) }; if (id) { x.unit_cost_id = id; delete x.mat_price; delete x.lab_price; delete x.exp_price; } else delete x.unit_cost_id; const n = { ...e, [row]: x }; if (!Object.keys(x).length) delete n[row]; return n; });
+    setDirty(true);
+  };
   const setE = (row: number, k: keyof Edit, v: string) => {
     setEdits((e) => { const x = { ...(e[row] || {}) }; if (v === '') delete x[k]; else x[k] = v; const n = { ...e, [row]: x }; if (!Object.keys(x).length) delete n[row]; return n; });
     setDirty(true);
@@ -59,7 +70,8 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
     const e = edits[it.row];
     if (!e || it.kind !== 'item') return null;
     const q0 = nz(e.qty) ?? Number(it.orig?.qty ?? it.qty);
-    const ps = PRICE.map((k) => nz(e[k]) ?? Number(it.orig?.[k] ?? it[k] ?? 0));
+    const uc = e.unit_cost_id ? ucCalc.get(e.unit_cost_id) : null;
+    const ps = uc ? [uc.ap.mat, uc.ap.lab, uc.ap.exp] : PRICE.map((k) => nz(e[k]) ?? Number(it.orig?.[k] ?? it[k] ?? 0));
     return { qty: q0, prices: ps, total: ps.reduce((s, p) => s + mul(q0, p), 0) };
   };
   const ancestorsOpen = (it: Item) => { let p = it.parent_row; while (p != null) { if (closed[p]) return false; p = byRow.get(p)?.parent_row ?? null; } return true; };
@@ -114,6 +126,7 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
             onClick={isG ? () => setClosed({ ...closed, [it.row]: !closed[it.row] }) : undefined}>
             {isG ? (closed[it.row] ? '▸ ' : '▾ ') : ''}{it.name}
             {ch && CH[ch] && <> <Pill c={CH[ch][1]}>{CH[ch][0]}</Pill></>}
+            {edits[it.row]?.unit_cost_id && <> <Pill c="green">일위대가 신규 {ucs.find((u) => u.id === edits[it.row].unit_cost_id)?.seq ?? '?'}</Pill></>}
             {JSON.stringify(edits[it.row] || null) !== JSON.stringify(rev.params?.edits?.[it.row] || null) && <> <Pill c="blue">저장 전</Pill></>}
             {canAdd && <button className="btn sm" style={{ marginLeft: 8 }} onClick={(e) => { e.stopPropagation(); setAddTo({ parent: it }); }}>+ 신규</button>}
           </td>}
@@ -125,7 +138,7 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
               value={edits[it.row]?.qty ?? ''} placeholder={fq(it.orig?.qty ?? it.qty)} onChange={(e) => setE(it.row, 'qty', e.target.value.replace(/[^\d.]/g, ''))} />
             : fq(V === 'C' && lv ? lv.qty : val('qty'))) : ''}</td>
           {PRICE.map((k, pi) => (
-            <td key={k} className="r">{isItem ? (V === 'C' && draft
+            <td key={k} className="r">{isItem ? (V === 'C' && draft && !edits[it.row]?.unit_cost_id
               ? <input className="input num" aria-label={`${it.name} 변경 단가`} style={{ width: 100, height: 34, textAlign: 'right', color: c }} inputMode="numeric"
                 value={edits[it.row]?.[k] ?? ''} placeholder={won(it.orig?.[k] ?? it[k])} onChange={(e) => setE(it.row, k, e.target.value.replace(/\D/g, ''))} />
               : won(V === 'C' && lv ? lv.prices[pi] : val(k))) : ''}</td>
@@ -134,6 +147,7 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
           {first && <td rowSpan={2} className="r num" style={{ color: diff < 0 ? 'var(--red)' : diff > 0 ? 'var(--teal)' : 'var(--sub)' }}>
             {diff ? sign(diff) : ''}
             {draft && isItem && <div className="row" style={{ justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+              <button className="btn sm" onClick={() => setLinkFor(it)}>일위대가</button>
               {edits[it.row] && <button className="btn sm" onClick={() => resetRow(it.row)}>되돌리기</button>}
               {Number(o.qty) > 0 && nz(edits[it.row]?.qty) !== 0 && <button className="btn sm" onClick={() => setE(it.row, 'qty', '0')}>삭제</button>}
             </div>}
@@ -145,12 +159,13 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
 
   const newRows = (n: NewItem, k: number) => {
     const par = byRow.get(n.parent_row);
-    const ps = PRICE.map((p) => Number(n[p] || 0));
+    const uc = n.unit_cost_id ? ucCalc.get(n.unit_cost_id) : null;
+    const ps = uc ? [uc.ap.mat, uc.ap.lab, uc.ap.exp] : PRICE.map((p) => Number(n[p] || 0));
     const total = ps.reduce((s, p) => s + mul(Number(n.qty || 0), p), 0);
     return order.map((V, idx) => (
       <tr key={'n' + k + V} style={{ color: colorOf(V) }}>
         {idx === 0 && <td rowSpan={2} className="muted">신규</td>}
-        {idx === 0 && <td rowSpan={2} style={{ paddingLeft: 12 + ((par?.level ?? 0) + 1) * 16, color: 'var(--text)' }}>{n.name} <Pill c="green">신규</Pill>
+        {idx === 0 && <td rowSpan={2} style={{ paddingLeft: 12 + ((par?.level ?? 0) + 1) * 16, color: 'var(--text)' }}>{n.name} <Pill c="green">신규</Pill>{uc ? <> <Pill c="green">일위대가 신규 {ucs.find((u) => u.id === n.unit_cost_id)?.seq}</Pill></> : null}
           {draft && <><button className="btn sm" style={{ marginLeft: 6 }} onClick={() => setAddTo({ parent: par, edit: n })}>고치기</button>
             <button className="btn sm" style={{ marginLeft: 4 }} onClick={() => { setNews(news.filter((x) => x !== n)); setDirty(true); }}>빼기</button></>}</td>}
         {idx === 0 && <td rowSpan={2} className="sub">{n.spec}</td>}
@@ -180,7 +195,7 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
           {draft && <button className="btn sm" onClick={onDelete}>지우기</button>}
         </div>
       </div>
-      <div className="muted">{rev.file_name} · 시트 '{rev.sheet_name}' · 기준: {rev.params?.base_title || '직전 차수'} · 윗줄 {rule.top === 'change' ? '변경' : '당초'} · 당초 {COLOR_NAME[rule.orig_color]} / 변경 {COLOR_NAME[rule.chg_color]}{rule.merge_text ? ' · 품명 · 규격 · 단위 한 칸' : ''}{rev.confirmed_at ? ` · 확정 ${dt(rev.confirmed_at)}` : ''}</div>
+      <div className="muted">{rev.file_name} · 시트 '{rev.sheet_name}' · 기준: {rev.params?.base_title || '직전 차수'} · 윗줄 {rule.top === 'change' ? '변경' : '당초'} · 당초 {COLOR_NAME[rule.orig_color]} / 변경 {COLOR_NAME[rule.chg_color]}{rule.merge_text ? ' · 품명 · 규격 · 단위 한 칸' : ''}{rev.locked && rev.confirmed_at ? ` · 확정 ${dt(rev.confirmed_at)}` : ''}</div>
       {draft && <div className="banner blue"><span>변경 줄의 수량 · 단가 칸에 바뀐 값만 넣고 <b>저장</b>을 누르세요. 비워 두면 당초와 같습니다. 엑셀에서 당초 단가는 값, 변경 단가는 당초 칸을 가리키는 수식(예: =G65)으로 들어갑니다.</span></div>}
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
@@ -195,15 +210,17 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
       </div>
 
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <Seg label="보기" value={section} onChange={setSection} items={[['detail', '공종별 내역'], ['summary', '원가계산서']]} />
-        <div className="row">
+        <Seg label="보기" value={section} onChange={setSection} items={[['detail', '공종별 내역'], ['summary', '원가계산서'], ['units', `신규 단가 (${ucs.length + qs.length})`]]} />
+        {section !== 'units' && <div className="row">
           <label className="row" style={{ gap: 6, minHeight: 44 }}><input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} style={{ width: 20, height: 20 }} /> 바뀐 것만</label>
           <button className="btn sm" onClick={() => setClosed({})}>모두 펼치기</button>
           <button className="btn sm" onClick={() => setClosed(Object.fromEntries(all.filter((i) => i.kind === 'group' && i.level >= 1).map((i) => [i.row, true])))}>접기</button>
-        </div>
+        </div>}
       </div>
 
-      {items.loading ? <Loading /> : items.error ? <ErrorBox msg={items.error} /> : (
+      {section === 'units' && (units.loading ? <Loading /> : units.error ? <ErrorBox msg={units.error.includes('boq_unit_costs') ? '일위대가 표가 아직 없습니다. 서버에서 bash scripts/update.sh 를 실행해 주세요.' : units.error} /> :
+        <UnitPanel rev={rev} draft={draft} rate={rate} ucs={ucs} qs={qs} used={used} onChange={() => { setUStamp((x) => x + 1); if (used.size) setDirty(true); }} />)}
+      {section !== 'units' && (items.loading ? <Loading /> : items.error ? <ErrorBox msg={items.error} /> : (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead><tr><th>행</th><th>공종명</th><th>규격</th><th className="c">단위</th><th className="c">구분</th><th className="r">수량</th><th className="r">재료비 단가</th><th className="r">노무비 단가</th><th className="r">경비 단가</th><th className="r">합계 금액</th><th className="r">증감</th></tr></thead>
@@ -218,9 +235,10 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
             </tbody>
           </table>
         </div>
-      )}
+      ))}
 
-      {addTo && <NewItemModal parent={addTo.parent} init={addTo.edit} rate={rate} onClose={() => setAddTo(null)} onSave={(n) => {
+      {linkFor && <LinkModal item={linkFor} ucs={ucs} qs={qs} rate={rate} current={edits[linkFor.row]?.unit_cost_id} onClose={() => setLinkFor(null)} onPick={(id) => { setLink(linkFor.row, id); setLinkFor(null); }} />}
+      {addTo && <NewItemModal parent={addTo.parent} init={addTo.edit} rate={rate} ucs={ucs} ucCalc={ucCalc} onClose={() => setAddTo(null)} onSave={(n) => {
         setNews(addTo.edit ? news.map((x) => (x === addTo.edit ? n : x)) : [...news, n]); setDirty(true); setAddTo(null);
       }} />}
       {confirmOpen && <ConfirmModal rev={rev} checks={checks} counts={counts} onClose={() => setConfirmOpen(false)} onDone={(fid) => { setConfirmOpen(false); toast('확정했습니다 · 준공내역서를 만들었습니다'); onChanged(fid); }} />}
@@ -230,32 +248,43 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
 }
 
 /* ---------- 신규 항목 ---------- */
-function NewItemModal({ parent, init, rate, onClose, onSave }: { parent: Item; init?: NewItem; rate?: number; onClose: () => void; onSave: (n: NewItem) => void }) {
+function NewItemModal({ parent, init, rate, ucs, ucCalc, onClose, onSave }: { parent: Item; init?: NewItem; rate?: number; ucs: UC[]; ucCalc: Map<string, any>; onClose: () => void; onSave: (n: NewItem) => void }) {
   const [f, setF] = useState<NewItem>(init || { id: 'n' + Date.now(), parent_row: parent.row, name: '', spec: '', unit: '', qty: '', mat_price: '', lab_price: '', exp_price: '', note: '신규' });
   const [applyRate, setApplyRate] = useState(false);
+  const [mode, setMode] = useState<'uc' | 'direct'>(init?.unit_cost_id || (!init && ucs.length) ? 'uc' : 'direct');
+  const [ucId, setUcId] = useState(init?.unit_cost_id || ucs[ucs.length - 1]?.id || '');
+  const uc = mode === 'uc' ? ucCalc.get(ucId) : null;
   const set = (k: keyof NewItem, v: string) => setF({ ...f, [k]: v });
-  const final = (k: 'mat_price' | 'lab_price' | 'exp_price') => { const v = Math.trunc(Number(f[k] || 0)); return applyRate && rate ? mul(v, rate) : v; };
+  const final = (k: 'mat_price' | 'lab_price' | 'exp_price') => {
+    if (uc) return uc.ap[k === 'mat_price' ? 'mat' : k === 'lab_price' ? 'lab' : 'exp'];
+    const v = Math.trunc(Number(f[k] || 0)); return applyRate && rate ? mul(v, rate) : v;
+  };
   const total = (['mat_price', 'lab_price', 'exp_price'] as const).reduce((s, k) => s + mul(Number(f.qty || 0), final(k)), 0);
-  const ok = f.name.trim() && Number(f.qty) > 0 && (['mat_price', 'lab_price', 'exp_price'] as const).some((k) => Number(f[k]) > 0);
+  const ok = f.name.trim() && Number(f.qty) > 0 && (uc ? true : (['mat_price', 'lab_price', 'exp_price'] as const).some((k) => Number(f[k]) > 0));
   return (
     <Modal title={init ? '신규 항목 고치기' : `신규 항목 · ${parent?.name || ''}`} onClose={onClose}
       foot={<><button className="btn" onClick={onClose}>취소</button>
-        <button className="btn pri" disabled={!ok} onClick={() => onSave({ ...f, name: f.name.trim(), mat_price: final('mat_price'), lab_price: final('lab_price'), exp_price: final('exp_price') })}>넣기</button></>}>
+        <button className="btn pri" disabled={!ok} onClick={() => onSave({ ...f, name: f.name.trim(), mat_price: final('mat_price'), lab_price: final('lab_price'), exp_price: final('exp_price'), unit_cost_id: uc ? ucId : undefined })}>넣기</button></>}>
       <p className="sub">변경 줄에만 들어가고 당초 줄은 비워 둡니다. 저장하면 '{parent?.name}' 소계와 그 위 합계에 더해집니다.</p>
       <div className="grid" style={{ gridTemplateColumns: '2fr 1.4fr 1fr', gap: 10 }}>
         <div className="field"><label htmlFor="ni1">공종명</label><input id="ni1" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} autoFocus /></div>
         <div className="field"><label htmlFor="ni2">규격</label><input id="ni2" className="input" value={f.spec} onChange={(e) => set('spec', e.target.value)} /></div>
         <div className="field"><label htmlFor="ni3">단위</label><input id="ni3" className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
       </div>
+      <Seg label="단가" value={mode} onChange={setMode} items={[['uc', `일위대가 연결 (${ucs.length})`], ['direct', '단가 직접 입력']]} />
+      {mode === 'uc' && (ucs.length
+        ? <div className="field"><label htmlFor="niu">일위대가</label><select id="niu" className="input" value={ucId} onChange={(e) => { setUcId(e.target.value); const u = ucs.find((x) => x.id === e.target.value); if (u && !f.name) setF({ ...f, name: u.name, spec: u.spec || '', unit: u.unit || '' }); }}>
+            {ucs.map((u) => <option key={u.id} value={u.id}>신규 {u.seq} · {u.name} {u.spec || ''} · {won(ucCalc.get(u.id)?.total)}원</option>)}</select></div>
+        : <div className="banner"><span>아직 일위대가가 없습니다. 이 창을 닫고 '신규 단가' 탭에서 먼저 만들거나, 단가를 직접 넣으세요.</span></div>)}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         <div className="field"><label htmlFor="ni4">수량</label><input id="ni4" className="input num" inputMode="decimal" value={f.qty} onChange={(e) => set('qty', e.target.value.replace(/[^\d.]/g, ''))} /></div>
         {([['mat_price', '재료비 단가'], ['lab_price', '노무비 단가'], ['exp_price', '경비 단가']] as const).map(([k, l]) => (
-          <div key={k} className="field"><label htmlFor={'ni' + k}>{l}</label><input id={'ni' + k} className="input num" inputMode="numeric" value={f[k]} onChange={(e) => set(k, e.target.value.replace(/\D/g, ''))} /></div>))}
+          <div key={k} className="field"><label htmlFor={'ni' + k}>{l}</label>{uc ? <span className="num" style={{ minHeight: 44, display: 'flex', alignItems: 'center' }}>{won(final(k))}</span> : <input id={'ni' + k} className="input num" inputMode="numeric" value={f[k]} onChange={(e) => set(k, e.target.value.replace(/\D/g, ''))} />}</div>))}
       </div>
-      {rate ? <label className="row" style={{ gap: 8, minHeight: 44 }}><input type="checkbox" checked={applyRate} onChange={(e) => setApplyRate(e.target.checked)} style={{ width: 20, height: 20 }} />
+      {rate && !uc ? <label className="row" style={{ gap: 8, minHeight: 44 }}><input type="checkbox" checked={applyRate} onChange={(e) => setApplyRate(e.target.checked)} style={{ width: 20, height: 20 }} />
         설계 단가를 넣었으면 낙찰률 {(rate * 100).toFixed(3)}% 적용 (원 미만 버림)</label> : null}
       <div className="muted">금액 {won(total)}원 = 재료비 {won(mul(Number(f.qty || 0), final('mat_price')))} + 노무비 {won(mul(Number(f.qty || 0), final('lab_price')))} + 경비 {won(mul(Number(f.qty || 0), final('exp_price')))}</div>
-      <div className="muted">일위대가 · 단가산출서를 새로 써서 연결하는 기능은 다음 단계에서 붙입니다. 지금은 단가를 직접 넣습니다.</div>
+      {!uc && <div className="muted">직접 넣은 단가는 확정 전 검사에서 '일위대가 연결 안 됨'으로 알려 드립니다 (확정은 됩니다).</div>}
     </Modal>
   );
 }
@@ -266,7 +295,7 @@ function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; chec
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const t = rev.totals || {}, ot = rev.params?.orig_totals || {};
-  const pass = checks.every((c) => c.ok);
+  const pass = checks.every((c) => c.ok || c.warn);
   const go = async () => {
     setBusy(true); setErr('');
     try { const r = await api('/api/boq/confirm', { revision_id: rev.id }); onDone(r.final_id); } catch (e: any) { setErr(e.message); }
@@ -282,7 +311,7 @@ function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; chec
         <tr><td>항목</td><td className="r">수량 변경 {counts.qty} · 단가 변경 {counts.price} · 신규 {counts.new} · 삭제 {counts.del}</td></tr>
       </tbody></table></div>
       <h3 style={{ fontSize: 15 }}>확정 전 검사</h3>
-      {checks.map((c) => <div key={c.label} className="row" style={{ gap: 8 }}><span aria-hidden>{c.ok ? '✅' : '⚠️'}</span><span>{c.label}{c.detail ? ` — ${c.detail}` : ''}</span></div>)}
+      {checks.map((c) => <div key={c.label} className="row" style={{ gap: 8 }}><span aria-hidden>{c.ok ? '✅' : c.warn ? '⚠️' : '❌'}</span><span>{c.label}{c.detail ? ` — ${c.detail}` : ''}</span></div>)}
       <div className="banner blue"><span>확정하면 ① 이 변경내역서를 잠그고 ② 변경 값으로 <b>준공내역서</b>를 새로 만듭니다 (한 줄 내역서, 단가는 값 · 금액은 TRUNC 수식). 고칠 일이 생기면 비밀번호로 잠금을 풀 수 있고, 다시 확정하면 준공내역서가 새 버전으로 만들어집니다.</span></div>
       <label className="row" style={{ gap: 8, minHeight: 44 }}><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} style={{ width: 20, height: 20 }} /> 위 내용을 확인했습니다</label>
       {err && <div className="banner red">{err}</div>}

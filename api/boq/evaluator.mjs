@@ -17,7 +17,24 @@ const FUNCS = {
   ROUNDUP: (x, d) => scale(num(x), digits(d), (v) => (v < 0 ? Math.floor(v) : Math.ceil(v))),
   ROUND: (x, d) => scale(num(x), digits(d), (v) => Math.sign(v) * Math.round(Math.abs(v))),
   INT: (x) => Math.floor(clean(num(x))),
+  // 범위 · 여러 값 (빈 칸 · 글자는 엑셀처럼 건너뜀)
+  MIN: (...a) => { const v = nums(a); return v.length ? Math.min(...v) : 0; },
+  MAX: (...a) => { const v = nums(a); return v.length ? Math.max(...v) : 0; },
+  AVERAGE: (...a) => { const v = nums(a); if (!v.length) throw FormulaError.DIV0; return clean(v.reduce((x, y) => x + y, 0) / v.length); },
+  COUNT: (...a) => nums(a).length,
 };
+function nums(args) {
+  const out = [];
+  const walk = (x, direct) => {
+    if (x == null) return;
+    if (Array.isArray(x)) { x.forEach((y) => walk(y, false)); return; }
+    if (typeof x === 'object' && 'value' in x) { walk(x.value, !x.isArray && !x.isRangeRef && direct); return; }
+    if (typeof x === 'number') out.push(x);
+    else if (direct && typeof x === 'string' && x.trim() !== '' && !isNaN(Number(x))) out.push(Number(x));
+  };
+  args.forEach((a) => walk(a, true));
+  return out;
+}
 
 export class Evaluator {
   constructor(model) {
