@@ -74,7 +74,7 @@ export default function Docs({ pid, mode }: { pid: string; mode: 'design' | 'con
               <div className="row between"><b style={{ fontSize: 15 }}>{DOC[c]}</b>{list.length ? <Pill c="green">{list.length}개</Pill> : <Pill>없음</Pill>}</div>
               {canEdit && <FileDrop multiple={c === 'drawing'} label={busy === c ? '올리는 중…' : c === 'drawing' ? '도면 파일들 (PDF · DWG · 이미지)' : '파일 올리기'} onFiles={(f) => put(f, c)} />}
               {list.slice(0, c === 'drawing' ? 8 : 3).map((d) => <Row key={d.id} d={d} />)}
-              {c === 'design_boq' && <span className="muted">엑셀 수식 · 서식 그대로 가져오기는 내역서 단계에서 연결됩니다.</span>}
+              {c === 'design_boq' && <span className="muted">올린 뒤 ④ 내역서 탭에서 '가져오기'를 누르세요.</span>}
             </div>); })}
         </div>
       </section>

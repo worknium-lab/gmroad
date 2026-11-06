@@ -3,6 +3,7 @@
 // 나머지 데이터는 웹앱이 수파베이스에 직접 접근하고, 권한은 DB의 RLS가 지킵니다.
 import http from 'node:http';
 import { admin, idToEmail, tempPassword } from './lib.mjs';
+import { boqRoutes } from './boq/routes.mjs';
 
 const PORT = Number(process.env.PORT || 3001);
 const PROFILE_FIELDS = ['name', 'company_id', 'role', 'emp_no', 'dept', 'rank', 'position', 'phone', 'email', 'address', 'hire_date', 'active'];
@@ -18,7 +19,7 @@ async function caller(req) {
 const isAdmin = (p) => p && ['system_admin', 'company_admin'].includes(p.role);
 
 async function body(req) {
-  let s = ''; for await (const c of req) { s += c; if (s.length > 1e6) throw new Error('too large'); }
+  let s = ''; for await (const c of req) { s += c; if (s.length > 5e6) throw new Error('too large'); }
   return s ? JSON.parse(s) : {};
 }
 function send(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); }
@@ -58,6 +59,8 @@ const routes = {
     await admin.from('activity_log').insert({ user_id: me.id, action: '비밀번호 초기화', target: t.username });
     return { temp_password: password };
   },
+
+  ...boqRoutes,
 };
 
 http.createServer(async (req, res) => {

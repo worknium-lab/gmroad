@@ -114,5 +114,15 @@ await asCommit(ids.staff, async () => {
 });
 check('자재 재고 8', Number((await as(ids.staff, () => q(`select stock_qty from gm.v_material_ledger`))).rows[0].stock_qty) === 8);
 
+// 내역서 (002): 금액 권한(can_boq) 있는 사람만 봄, 쓰기는 API(service_role)만
+await q(`insert into gm.boq_revisions (project_id, kind, title, storage_path, file_name, sheet_name, header_row, col_map) values ($1,'design','설계내역서','x','x.xlsx','내역서',2,'{}')`, [pid]);
+check('관리자는 내역서를 봄', (await as(ids.admin, () => q(`select * from gm.boq_revisions`))).rowCount === 1);
+check('내역서 권한 없는 직원은 못 봄', (await as(ids.staff, () => q(`select * from gm.boq_revisions`))).rowCount === 0);
+await q(`update gm.project_members set can_boq = true where project_id=$1 and user_id=$2`, [pid, ids.staff]);
+check('내역서 권한 준 직원은 봄', (await as(ids.staff, () => q(`select * from gm.boq_revisions`))).rowCount === 1);
+err = null;
+try { await as(ids.staff, () => q(`insert into gm.boq_revisions (project_id, kind, title, storage_path, file_name, sheet_name, header_row) values ($1,'design','y','y','y','y',1)`, [pid])); } catch (e) { err = e; }
+check('직원이 직접 내역서를 쓰지 못함', !!err);
+
 await c.end();
 await db.stop();

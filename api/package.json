@@ -4,6 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "main": "server.mjs",
-  "scripts": { "start": "node server.mjs", "bootstrap": "node bootstrap.mjs" },
-  "dependencies": { "@supabase/supabase-js": "^2.45.0" }
+  "scripts": {
+    "start": "node server.mjs",
+    "bootstrap": "node bootstrap.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "exceljs": "^4.4.0",
+    "fast-formula-parser": "^1.0.19",
+    "jszip": "^3.10.2"
+  }
 }
