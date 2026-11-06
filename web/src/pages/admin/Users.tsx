@@ -12,7 +12,7 @@ export default function Users() {
   const toast = useToast();
   const [edit, setEdit] = useState<any | null>(null);
   const [temp, setTemp] = useState<{ username: string; password: string } | null>(null);
-  const { data, loading, reload } = useLoad(() => q<any[]>(sb.from('profiles').select('*').order('created_at')), []);
+  const { data, loading, reload } = useLoad(() => q<any[]>(sb.rpc('admin_profiles')), []);
   if (loading) return <Loading />;
   const coName = (id: string) => companies.find((c) => c.id === id)?.name || '-';
   const roles = Object.entries(ROLE).filter(([k]) => isSys || k !== 'system_admin');

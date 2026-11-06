@@ -6,6 +6,7 @@ import { admin, idToEmail, tempPassword } from './lib.mjs';
 import { boqRoutes } from './boq/routes.mjs';
 import { meetingRoutes } from './meetings/routes.mjs';
 import { laborRoutes } from './labor/routes.mjs';
+import { spaceRoutes, shareDownload, startSpaceWorker } from './space/routes.mjs';
 import { resume } from './meetings/process.mjs';
 
 const PORT = Number(process.env.PORT || 3001);
@@ -66,10 +67,15 @@ const routes = {
   ...boqRoutes,
   ...meetingRoutes,
   ...laborRoutes,
+  ...spaceRoutes,
 };
 
 http.createServer(async (req, res) => {
   const path = (req.url || '').split('?')[0].replace(/\/+$/, '');
+  if (req.method === 'GET' && path.startsWith('/api/share/')) {
+    try { return await shareDownload(req, res, decodeURIComponent(path.slice('/api/share/'.length))); }
+    catch (e) { console.error(e); return send(res, 500, { error: '내려받기 실패' }); }
+  }
   const fn = routes[`${req.method} ${path}`];
   if (!fn) return send(res, 404, { error: 'not found' });
   try {
@@ -80,4 +86,4 @@ http.createServer(async (req, res) => {
     if (Array.isArray(e)) return send(res, e[0], { error: e[1] });
     console.error(e); send(res, 500, { error: String(e.message || e) });
   }
-}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); });
+}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); });

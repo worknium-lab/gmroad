@@ -23,6 +23,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { head: '', items: [{ to: '/', label: '홈' }] },
     { head: '프로젝트', items: [{ to: '/projects', label: '프로젝트 목록 · 통계', match: '/projects' }] },
     { head: '현장', items: [{ to: '/field', label: '현장 앱 열기' }] },
+    { head: '회사 공용공간', items: [{ to: '/space', label: '공용공간 홈' }, { to: '/space/board', label: '게시판', match: '/space/board' }, { to: '/space/library', label: '자료실' }, { to: '/space/calendar', label: '회사 일정' }, { to: '/space/directory', label: '사내 연락처' }] },
     { head: '내 정보', items: [{ to: '/me', label: '인사정보 · 비밀번호' }] },
   ];
   if (isAdmin) groups.push({ head: '관리자', lock: true, items: [{ to: '/admin/users', label: '사용자 · 권한' }, { to: '/admin/companies', label: '회사 관리' }] });
@@ -38,7 +39,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {g.items.map((i) => <NavLink key={i.to} to={i.to} className={() => 'nv' + (isOn(i) ? ' on' : '')}>{i.label}</NavLink>)}
           </div>
         ))}
-        <div style={{ marginTop: 'auto', fontSize: 11, color: '#8695AE', padding: '0 10px' }}>1차 버전 · 내역서 · 노무비 · 회의록 · 공용공간은 다음 단계</div>
+        <div style={{ marginTop: 'auto', fontSize: 11, color: '#8695AE', padding: '0 10px' }}>테스트 운영 중 (개인 홈 서버)</div>
       </nav>
       <div className="main">
         <header className="top">
@@ -60,7 +61,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <nav className="mtabs" aria-label="하단 메뉴">
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'on' : '')}>홈</NavLink>
         <NavLink to="/projects" className={({ isActive }) => (isActive ? 'on' : '')}>프로젝트</NavLink>
-        <NavLink to="/field" className={({ isActive }) => (isActive ? 'on' : '')}>현장 앱</NavLink>
+        <NavLink to="/space" className={({ isActive }) => (isActive ? 'on' : '')}>공용공간</NavLink>
         <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'on' : '')}>알림{unread ? ` ${unread}` : ''}</NavLink>
         <NavLink to="/me" className={({ isActive }) => (isActive ? 'on' : '')}>더보기</NavLink>
       </nav>

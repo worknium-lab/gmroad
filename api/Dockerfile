@@ -6,5 +6,6 @@ COPY *.mjs ./
 COPY boq ./boq
 COPY meetings ./meetings
 COPY labor ./labor
+COPY space ./space
 EXPOSE 3001
 CMD ["node", "server.mjs"]

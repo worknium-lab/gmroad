@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!s) { setProfile(null); setLoading(false); return; }
     try {
       const [p, cs] = await Promise.all([
-        q<Profile>(sb.from('profiles').select('*').eq('id', s.user.id).single()),
+        q<Profile>(sb.rpc('my_profile').single()),
         q<Company[]>(sb.from('companies').select('*').order('sort')),
       ]);
       setProfile(p); setCompanies(cs);

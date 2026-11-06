@@ -19,6 +19,10 @@ import FieldPhoto from './pages/field/FieldPhoto';
 import FieldMaterial from './pages/field/FieldMaterial';
 import FieldRequests from './pages/field/FieldRequests';
 import FieldMeeting from './pages/field/FieldMeeting';
+import { SpaceHome, Directory } from './pages/space/Space';
+import { BoardList, PostView, PostEdit } from './pages/space/Board';
+import Library from './pages/space/Library';
+import CalendarPage from './pages/space/Calendar';
 
 function Gate() {
   const { session, profile, loading, isAdmin } = useAuth();
@@ -30,7 +34,7 @@ function Gate() {
   if (!profile.active) return <div className="spin">사용이 중지된 계정입니다.</div>;
   if (profile.must_change_password) return <ChangePassword forced />;
   const fieldOnly = profile.role === 'field';
-  if (fieldOnly && !loc.pathname.startsWith('/field') && loc.pathname !== '/me') return <Navigate to="/field" replace />;
+  if (fieldOnly && !loc.pathname.startsWith('/field') && !loc.pathname.startsWith('/space') && loc.pathname !== '/me' && loc.pathname !== '/notifications') return <Navigate to="/field" replace />;
 
   return (
     <Routes>
@@ -46,6 +50,14 @@ function Gate() {
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/projects/:id/:tab" element={<ProjectPage />} />
         <Route path="/notifications" element={<Notifications />} />
+        <Route path="/space" element={<SpaceHome />} />
+        <Route path="/space/board" element={<BoardList />} />
+        <Route path="/space/board/new" element={<PostEdit />} />
+        <Route path="/space/board/:id" element={<PostView />} />
+        <Route path="/space/board/:id/edit" element={<PostEdit />} />
+        <Route path="/space/library" element={<Library />} />
+        <Route path="/space/calendar" element={<CalendarPage />} />
+        <Route path="/space/directory" element={<Directory />} />
         <Route path="/me" element={<Me />} />
         {isAdmin && <Route path="/admin/users" element={<Users />} />}
         {isAdmin && <Route path="/admin/companies" element={<Companies />} />}

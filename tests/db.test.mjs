@@ -173,5 +173,37 @@ const lm = await asCommit(ids.staff, async () => (await q(`insert into gm.labor_
 await asCommit(ids.staff, () => q(`update gm.labor_months set locked = true where id=$1`, [lm]));
 check('확정된 노무비는 화면에서 못 고침', (await as(ids.staff, () => q(`update gm.labor_months set locked=false where id=$1 returning id`, [lm]))).rowCount === 0);
 
+// 007: 공용공간 · 인사정보 보호
+await q(`update gm.profiles set phone='010-1111-2222', address='서울시', phone_public=false where id=$1`, [ids.staff]);
+err = null;
+try { await as(ids.field, () => q(`select address from gm.profiles where id=$1`, [ids.staff])); } catch (e) { err = e; }
+check('다른 사람 주소는 못 읽음', !!err);
+check('이름 · 부서는 읽음', (await as(ids.field, () => q(`select name, dept from gm.profiles`))).rowCount >= 3);
+check('내 정보는 전부 읽음', (await as(ids.staff, () => q(`select * from gm.my_profile()`))).rows[0]?.address === '서울시');
+check('관리자는 직원 정보 전부', (await as(ids.admin, () => q(`select * from gm.admin_profiles()`))).rowCount === 4);
+check('일반 직원은 관리자 목록 못 봄', (await as(ids.staff, () => q(`select * from gm.admin_profiles()`))).rowCount === 0);
+check('연락처: 비공개 휴대폰은 숨김', (await as(ids.field, () => q(`select phone from gm.v_directory where id=$1`, [ids.staff]))).rows[0].phone === null);
+await q(`update gm.profiles set phone_public=true where id=$1`, [ids.staff]);
+check('연락처: 공개한 휴대폰은 보임', (await as(ids.field, () => q(`select phone from gm.v_directory where id=$1`, [ids.staff]))).rows[0].phone === '010-1111-2222');
+const post = await asCommit(ids.staff, async () => (await q(`insert into gm.posts (title, must_read, target_companies, event_date, author_id) values ('안전교육', true, array[$1::uuid], '2026-11-20', $2) returning id`, [co[0].id, ids.staff])).rows[0].id);
+check('대상 회사 직원은 공지를 봄', (await as(ids.field, () => q(`select * from gm.posts`))).rowCount === 1);
+check('다른 회사 직원은 못 봄', (await as(ids.other, () => q(`select * from gm.posts`))).rowCount === 0);
+check('공지 날짜가 회사 일정에 올라감', (await as(ids.field, () => q(`select * from gm.events where post_id=$1`, [post]))).rows[0]?.category === '회사');
+check('다른 회사는 그 일정도 못 봄', (await as(ids.other, () => q(`select * from gm.events`))).rowCount === 0);
+err = null;
+try { await as(ids.field, () => q(`insert into gm.posts (title, author_id) values ('x', $1)`, [ids.field])); } catch (e) { err = e; }
+check('현장 담당자는 공지를 못 씀', !!err);
+await asCommit(ids.field, () => q(`insert into gm.post_reads (post_id, user_id, confirmed_at) values ($1,$2,now())`, [post, ids.field]));
+check('작성자는 확인 현황을 봄', (await as(ids.staff, () => q(`select * from gm.post_reads where post_id=$1`, [post]))).rowCount === 1);
+check('다른 사람은 남의 확인 기록을 못 봄', (await as(ids.admin, () => q(`select 1`))) && (await as(ids.other, () => q(`select * from gm.post_reads`))).rowCount === 0);
+const fut = await asCommit(ids.staff, async () => (await q(`insert into gm.posts (title, publish_at, author_id) values ('예약', now() + interval '1 day', $1) returning id`, [ids.staff])).rows[0].id);
+check('예약 글은 게시 전에는 안 보임', (await as(ids.field, () => q(`select * from gm.posts where id=$1`, [fut]))).rowCount === 0);
+await asCommit(ids.staff, () => q(`insert into gm.library_files (folder, title, path, file_name) values ('카탈로그','특허공법 카탈로그','library/x/a.pdf','a.pdf')`));
+const v2 = await asCommit(ids.staff, async () => (await q(`insert into gm.library_files (folder, title, path, file_name) values ('카탈로그','특허공법 카탈로그','library/x/b.pdf','b.pdf') returning version`)).rows[0].version);
+check('같은 이름은 새 버전', v2 === 2 && (await q(`select count(*)::int n from gm.library_files where is_latest`)).rows[0].n === 1);
+err = null;
+try { await as(ids.staff, () => q(`insert into gm.share_links (file_id, token, expires_at) select id, 'abc', now() + interval '7 day' from gm.library_files limit 1`)); } catch (e) { err = e; }
+check('사내 전용 자료는 외부 공유 링크를 못 만듦', !!err);
+
 await c.end();
 await db.stop();

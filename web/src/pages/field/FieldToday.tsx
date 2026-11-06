@@ -93,6 +93,7 @@ export default function FieldToday() {
 
       <section className="fcard">
         <Link className="item" to="/field/photo"><span style={{ flex: 1 }}><b>사진</b><div className="muted">오늘 {counts.photos}장</div></span><span style={{ color: 'var(--teal)', fontWeight: 700 }}>{counts.photos ? '추가' : '찍기'} ›</span></Link>
+        <Link className="item" to="/space/board" style={{ borderTop: '1px solid var(--line-2)' }}><span style={{ flex: 1 }}><b>본사 공지 · 전달사항</b><div className="muted">필독 공지는 읽고 '확인했습니다'를 눌러 주세요</div></span><span style={{ color: 'var(--teal)', fontWeight: 700 }}>보기 ›</span></Link>
         <Link className="item" to="/field/meeting" style={{ borderTop: '1px solid var(--line-2)' }}><span style={{ flex: 1 }}><b>회의 녹음 · 회의록 스캔</b><div className="muted">현장 회의를 녹음하거나 수기 회의록을 찍어 올립니다</div></span><span style={{ color: 'var(--teal)', fontWeight: 700 }}>시작 ›</span></Link>
         <Link className="item" to="/field/material" style={{ borderTop: '1px solid var(--line-2)' }}><span style={{ flex: 1 }}><b>자재반입 · 사용</b><div className="muted">오늘 {counts.moves}건</div></span><span style={{ color: 'var(--teal)', fontWeight: 700 }}>입력 ›</span></Link>
       </section>
