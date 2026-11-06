@@ -1,0 +1,9 @@
+{
+  "name": "gm-integrated-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": { "start": "node server.mjs", "bootstrap": "node bootstrap.mjs" },
+  "dependencies": { "@supabase/supabase-js": "^2.45.0" }
+}

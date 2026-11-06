@@ -1,0 +1,30 @@
+# GM 통합관리도구
+#   수파베이스(DB · 로그인 · 파일)는 이미 서버에 따로 떠 있는 셀프호스팅을 씁니다.
+#   여기서는 웹앱(nginx)과 관리 API 두 개만 띄웁니다.
+name: gm-integrated
+
+services:
+  web:
+    build: ./web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_INTERNAL_URL: ${SUPABASE_INTERNAL_URL:-http://host.docker.internal:8000}
+      GM_PUBLIC_SUPABASE_URL: ${GM_PUBLIC_SUPABASE_URL:-}
+      NGINX_ENVSUBST_FILTER: "SUPABASE_INTERNAL_URL"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [api]
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      SUPABASE_INTERNAL_URL: ${SUPABASE_INTERNAL_URL:-http://host.docker.internal:8000}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-gmconst}
+      ADMIN_TEMP_PASSWORD: ${ADMIN_TEMP_PASSWORD:-gmconst}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
