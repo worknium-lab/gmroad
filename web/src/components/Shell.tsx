@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth';
 import { sb } from '../lib/supabase';
 import { ROLE } from '../lib/format';
 
-type Item = { to: string; label: string; match?: string };
+type Item = { to: string; label: string; match?: string; not?: string };
 export function Shell({ children }: { children: ReactNode }) {
   const { profile, companies, company, setCompany, isAdmin } = useAuth();
   const loc = useLocation();
@@ -22,12 +22,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const groups: { head: string; lock?: boolean; items: Item[] }[] = [
     { head: '', items: [{ to: '/', label: '홈' }] },
     { head: '프로젝트', items: [{ to: '/projects', label: '프로젝트 목록 · 통계', match: '/projects' }] },
+    { head: '제품 · 실적', items: [{ to: '/products', label: '실적 한눈에' }, { to: '/products/list', label: '제품 목록 (관급 · 사급)', match: '/products/', not: '/products/deliveries' }, { to: '/products/deliveries', label: '납품이력' }] },
     { head: '현장', items: [{ to: '/field', label: '현장 앱 열기' }, { to: '/photos', label: '사진 앱 (GM 사진)' }] },
     { head: '회사 공용공간', items: [{ to: '/space', label: '공용공간 홈' }, { to: '/space/board', label: '게시판', match: '/space/board' }, { to: '/space/library', label: '자료실' }, { to: '/space/calendar', label: '회사 일정' }, { to: '/space/directory', label: '사내 연락처' }] },
     { head: '내 정보', items: [{ to: '/me', label: '인사정보 · 비밀번호' }] },
   ];
   if (isAdmin) groups.push({ head: '관리자', lock: true, items: [{ to: '/admin/users', label: '사용자 · 권한' }, { to: '/admin/companies', label: '회사 관리' }] });
-  const isOn = (i: Item) => (i.match ? loc.pathname.startsWith(i.match) : loc.pathname === i.to);
+  const isOn = (i: Item) => (i.match ? loc.pathname.startsWith(i.match) && loc.pathname !== i.not : loc.pathname === i.to);
 
   return (
     <div className="app">

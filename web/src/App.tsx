@@ -23,6 +23,7 @@ import { SpaceHome, Directory } from './pages/space/Space';
 import { BoardList, PostView, PostEdit } from './pages/space/Board';
 import Library from './pages/space/Library';
 import CalendarPage from './pages/space/Calendar';
+import { ProductDashboard, ProductList, ProductDetail, DeliveryPage } from './pages/products/Products';
 import { PhotoHome, PhotoAlbum } from './pages/photos/PhotoApp';
 import { SheetList, SheetEditor } from './pages/photos/PhotoSheet';
 
@@ -64,6 +65,10 @@ function Gate() {
         <Route path="/space/library" element={<Library />} />
         <Route path="/space/calendar" element={<CalendarPage />} />
         <Route path="/space/directory" element={<Directory />} />
+        <Route path="/products" element={<ProductDashboard />} />
+        <Route path="/products/list" element={<ProductList />} />
+        <Route path="/products/deliveries" element={<DeliveryPage />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/me" element={<Me />} />
         {isAdmin && <Route path="/admin/users" element={<Users />} />}
         {isAdmin && <Route path="/admin/companies" element={<Companies />} />}

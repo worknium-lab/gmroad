@@ -228,5 +228,28 @@ err = null;
 try { await as(ids.field, () => q(`update gm.photo_sheets set per_page=5 where id=$1`, [sh])); } catch (e) { err = e; }
 check('한 쪽 사진 수는 2·3·4·6만', !!err);
 
+// 009: 제품 · 실적
+const prod = await asCommit(ids.staff, async () => (await q(`insert into gm.products (company_id, kind, name, spec, unit, price, contract_end) values ($1,'관급','탄성받침','400×400','EA',1850000, current_date + 30) returning id`, [co[0].id])).rows[0].id);
+check('본사 직원은 자기 회사 제품 등록', !!prod);
+err = null;
+try { await as(ids.staff, () => q(`insert into gm.products (company_id, name) values ($1,'남의 회사 제품')`, [co[1].id])); } catch (e) { err = e; }
+check('다른 회사 제품은 못 등록', !!err);
+check('현장 담당자는 제품을 못 봄', (await as(ids.field, () => q(`select * from gm.products`))).rowCount === 0);
+check('타사 직원도 조회는 함 (회사 선택으로 거름)', (await as(ids.other, () => q(`select * from gm.products`))).rowCount === 1);
+check('타사 직원은 고치지 못함', (await as(ids.other, () => q(`update gm.products set price=1 where id=$1 returning id`, [prod]))).rowCount === 0);
+const dv = await asCommit(ids.staff, async () => (await q(`insert into gm.deliveries (product_id, company_id, kind, project_id, qty, price, delivered_on) values ($1, $2, '사급', $3, 3.7, 1850001, '2026-10-15') returning *`, [prod, co[1].id, pid])).rows[0]);
+check('납품 금액 = TRUNC(수량×단가)', Number(dv.amount) === Math.trunc(3.7 * 1850001));
+check('회사 · 관급/사급은 제품에서 자동', dv.company_id === co[0].id && dv.kind === '관급');
+check('프로젝트 연결하면 공사명 · 발주처 자동', dv.project_name === '공릉천교' && dv.client === '발주처');
+const stv = (await as(ids.admin, () => q(`select * from gm.v_product_stats where product_id=$1`, [prod]))).rows[0];
+check('제품별 납품 누계', stv.n === 1 && Number(stv.amount) === Number(dv.amount));
+err = null;
+try { await as(ids.staff, () => q(`delete from gm.products where id=$1`, [prod])); } catch (e) { err = e; }
+check('납품이력이 있는 제품은 못 지움 (중단 처리)', !!err);
+check('사진 폴더: 자기 회사 제품만 올림', (await as(ids.staff, () => q(`insert into storage.objects (bucket_id, name) values ('space-files', $1) returning id`, ['product/' + prod + '/a.jpg']))).rowCount === 1);
+err = null;
+try { await as(ids.other, () => q(`insert into storage.objects (bucket_id, name) values ('space-files', $1)`, ['product/' + prod + '/a.jpg'])); } catch (e) { err = e; }
+check('다른 회사 제품 사진은 못 올림', !!err);
+
 await c.end();
 await db.stop();

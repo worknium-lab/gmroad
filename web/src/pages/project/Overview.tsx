@@ -1,3 +1,4 @@
+import { ProjectDeliveries } from '../products/Products';
 import { useState } from 'react';
 import { sb, q } from '../../lib/supabase';
 import { Project } from '../../lib/data';
@@ -48,6 +49,7 @@ export default function Overview({ p }: { p: Project }) {
       <section className="card"><h2>최근 작업일보</h2>
         {data?.acts.length ? data.acts.map((a) => <div key={a.report_date} className="row between" style={{ borderTop: '1px solid var(--line-2)', paddingTop: 8 }}><span>{a.report_date}</span><span className="muted">{a.submitted_at ? '제출 ' + dt(a.submitted_at) : a.status}</span></div>) : <span className="sub">아직 작업일보가 없습니다.</span>}
       </section>
+      <ProjectDeliveries pid={p.id} />
       {add && <Modal title="참여자 추가" onClose={() => setAdd(false)}>
         {data?.people.filter((x) => !data.members.some((m) => m.user_id === x.id)).map((x) => (
           <button key={x.id} className="btn" style={{ justifyContent: 'space-between' }} onClick={() => addMember(x.id)}><span>{x.name || x.username} ({x.username})</span><span className="muted">{ROLE[x.role]}</span></button>))}
