@@ -33,7 +33,7 @@ function Gate() {
   if (!cfg.SUPABASE_ANON_KEY) return <div className="spin">설정이 비어 있습니다. 서버의 .env에 SUPABASE_URL · SUPABASE_ANON_KEY를 넣고 다시 띄워 주세요.</div>;
   if (loading) return <Loading />;
   if (!session) return <Login />;
-  if (!profile) return <div className="spin">계정 정보(profiles)가 없습니다. 관리자에게 문의하세요. <button className="link" onClick={() => import('./lib/supabase').then((m) => m.sb.auth.signOut())}>로그아웃</button></div>;
+  if (!profile) return <div className="spin">계정 정보(profiles)가 없습니다. 관리자에게 문의하세요. <button className="link" onClick={() => import('./lib/push').then((m) => m.logout())}>로그아웃</button></div>;
   if (!profile.active) return <div className="spin">사용이 중지된 계정입니다.</div>;
   if (profile.must_change_password) return <ChangePassword forced />;
   const fieldOnly = profile.role === 'field';

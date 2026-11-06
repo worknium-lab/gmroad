@@ -1,3 +1,4 @@
+import { logout } from '../../lib/push';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { sb, q } from '../../lib/supabase';
@@ -44,7 +45,7 @@ export function FieldShell({ title, children, back }: { title?: string; children
               <select id="fp" value={pid} onChange={(e) => choose(e.target.value)}>{(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
             </div>)}
           <button className="ib" aria-label={`알림 ${unread}건`} onClick={() => nav('/field/requests')}>🔔{unread > 0 && <span className="dot" />}</button>
-          {!canEdit && <button className="ib" aria-label="로그아웃" onClick={() => sb.auth.signOut()} style={{ fontSize: 12 }}>나가기</button>}
+          {!canEdit && <button className="ib" aria-label="로그아웃" onClick={() => logout()} style={{ fontSize: 12 }}>나가기</button>}
         </header>
         <div className="fbody">
           {projects && !projects.length ? <div className="empty">배정된 현장이 없습니다. 본사에 현장 배정을 요청하세요.</div> : pid ? children : null}

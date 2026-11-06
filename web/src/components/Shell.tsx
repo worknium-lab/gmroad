@@ -1,3 +1,4 @@
+import { logout } from '../lib/push';
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
@@ -55,7 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link to="/me" className="hide-m" style={{ display: 'flex', flexDirection: 'column', textDecoration: 'none', color: 'inherit' }}>
             <b style={{ fontSize: 14 }}>{profile?.name || profile?.username}</b><span className="muted">{ROLE[profile?.role || '']}</span>
           </Link>
-          <button className="btn sm hide-m" onClick={() => sb.auth.signOut()}>로그아웃</button>
+          <button className="btn sm hide-m" onClick={() => logout()}>로그아웃</button>
         </header>
         <main className="page">{children}</main>
       </div>

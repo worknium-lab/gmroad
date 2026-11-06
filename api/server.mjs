@@ -6,6 +6,7 @@ import { admin, idToEmail, tempPassword } from './lib.mjs';
 import { boqRoutes } from './boq/routes.mjs';
 import { meetingRoutes } from './meetings/routes.mjs';
 import { laborRoutes } from './labor/routes.mjs';
+import { pushRoutes, startPushWorker } from './push/push.mjs';
 import { productRoutes } from './products/routes.mjs';
 import { photoRoutes } from './photos/routes.mjs';
 import { spaceRoutes, shareDownload, startSpaceWorker } from './space/routes.mjs';
@@ -72,6 +73,7 @@ const routes = {
   ...spaceRoutes,
   ...photoRoutes,
   ...productRoutes,
+  ...pushRoutes,
 };
 
 http.createServer(async (req, res) => {
@@ -90,4 +92,4 @@ http.createServer(async (req, res) => {
     if (Array.isArray(e)) return send(res, e[0], { error: e[1] });
     console.error(e); send(res, 500, { error: String(e.message || e) });
   }
-}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); });
+}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); startPushWorker(); });

@@ -1,3 +1,4 @@
+import { PushNudge } from '../../components/PushCard';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { sb, q } from '../../lib/supabase';
@@ -29,6 +30,7 @@ export default function FieldRequests() {
   const open = async (d: any) => { const u = await signedUrls([d.storage_path]); window.open(u[d.storage_path], '_blank'); };
   return (
     <>
+      <PushNudge teal />
       <section className="fcard"><h2>본사 요청</h2>
         {!reqs.length && <span className="sub">받은 요청이 없습니다.</span>}
         {reqs.map((r) => (

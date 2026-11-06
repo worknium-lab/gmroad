@@ -251,5 +251,18 @@ err = null;
 try { await as(ids.other, () => q(`insert into storage.objects (bucket_id, name) values ('space-files', $1)`, ['product/' + prod + '/a.jpg'])); } catch (e) { err = e; }
 check('다른 회사 제품 사진은 못 올림', !!err);
 
+// 010: 앱 푸시
+await asCommit(ids.field, () => q(`select gm.push_register('https://push.example/abc', 'k1', 'a1', 'Android Chrome')`));
+check('내 기기 등록', (await as(ids.field, () => q(`select * from gm.push_subscriptions`))).rowCount === 1);
+check('남의 기기는 안 보임', (await as(ids.staff, () => q(`select * from gm.push_subscriptions`))).rowCount === 0);
+await asCommit(ids.staff, () => q(`select gm.push_register('https://push.example/abc', 'k2', 'a2', 'Android Chrome')`));
+check('같은 폰에 다른 사람이 로그인하면 넘겨받음', (await q(`select user_id from gm.push_subscriptions`)).rows.every((r) => r.user_id === ids.staff) && (await q(`select count(*)::int n from gm.push_subscriptions`)).rows[0].n === 1);
+err = null;
+try { await as(ids.admin, () => q(`select * from gm.push_keys`)); } catch (e) { err = e; }
+check('푸시 키는 화면에서 못 읽음', !!err);
+err = null;
+try { await as(ids.field, () => q(`insert into gm.push_subscriptions (user_id, endpoint, p256dh, auth) values ($1,'x','y','z')`, [ids.staff])); } catch (e) { err = e; }
+check('남의 이름으로 기기 등록 못 함', !!err);
+
 await c.end();
 await db.stop();

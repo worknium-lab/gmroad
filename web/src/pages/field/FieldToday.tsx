@@ -1,3 +1,4 @@
+import { PushNudge } from '../../components/PushCard';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { sb, q } from '../../lib/supabase';
@@ -54,6 +55,7 @@ export default function FieldToday() {
   return (
     <>
       <div className="row between"><h1 style={{ fontSize: 20 }}>{dateK(today())} 작업일보</h1><Pill c={st[1]}>{st[0]}</Pill></div>
+      <PushNudge teal />
       {report?.status === 'returned' && <div className="banner red">본사 수정 요청: {report.return_reason}</div>}
       {locked && <div className="banner teal">제출했습니다. 고칠 게 있으면 본사에 수정 요청을 받아야 합니다.</div>}
 

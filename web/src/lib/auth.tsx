@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         q<Company[]>(sb.from('companies').select('*').order('sort')),
       ]);
       setProfile(p); setCompanies(cs);
+      import('./push').then((m) => m.syncPush());   // 켜 둔 기기면 지금 로그인한 사람으로 다시 등록
     } catch { setProfile(null); }
     setLoading(false);
   }, []);

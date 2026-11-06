@@ -1,3 +1,4 @@
+import { logout } from '../lib/push';
 import { FormEvent, useState } from 'react';
 import { sb } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -25,7 +26,7 @@ export default function ChangePassword({ forced }: { forced?: boolean }) {
       {err && <div className="banner red" role="alert">{err}</div>}
       {ok && <div className="banner teal">비밀번호를 바꿨습니다.</div>}
       <button className="btn pri" disabled={busy}>저장</button>
-      {forced && <button type="button" className="link" onClick={() => sb.auth.signOut()}>로그아웃</button>}
+      {forced && <button type="button" className="link" onClick={() => logout()}>로그아웃</button>}
     </form>
   );
   return forced ? <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>{body}</div> : body;

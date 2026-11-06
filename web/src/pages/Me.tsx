@@ -1,3 +1,5 @@
+import { PushCard } from '../components/PushCard';
+import { logout } from '../lib/push';
 import { useState } from 'react';
 import { sb, q } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -52,8 +54,9 @@ export default function Me() {
             <button className="btn pri" onClick={print}>미리보기 · 인쇄 (PDF 저장 가능)</button>
             <span className="muted">인사정보와 관리자 › 회사 관리의 회사 정보가 들어갑니다. 발급 이력이 남습니다.</span>
           </section>
+          <PushCard />
           <section className="card"><ChangePassword /></section>
-          <button className="btn" onClick={() => sb.auth.signOut()}>로그아웃</button>
+          <button className="btn" onClick={() => logout()}>로그아웃</button>
         </div>
       </div>
     </>
