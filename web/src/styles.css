@@ -352,3 +352,13 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 .lic-band.notice { background: var(--orange-l); color: var(--orange-t); border-color: var(--orange-b); }
 .lic-band.grace { background: var(--red-l); color: var(--red); border-color: #F2B8B0; }
 .lic-band.ro { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* 참고 현장 (PJ-10 개요 맨 아래) */
+.refsites { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.refsite { display: flex; flex-direction: column; gap: 6px; text-align: left; min-height: 44px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; color: inherit; cursor: pointer; }
+.refsite:hover, .refsite:focus-visible { border-color: var(--blue); background: var(--blue-l); }
+.refsite b { font-size: 14px; }
+
+/* 워크니움 공지 팝업 */
+.vn-body { white-space: pre-line; line-height: 1.7; font-size: 15px; max-height: 60vh; overflow-y: auto; }
+.vn-head { display: flex; align-items: center; gap: 8px; }

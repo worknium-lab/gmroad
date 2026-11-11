@@ -36,10 +36,16 @@ function render(){const t=S.today;
  let h=`<section class="card"><div class="row"><h2 style="margin:0" class="sp">고객사 ${S.customers.length}곳</h2><button class="pri" id="add">＋ 고객사 등록</button><button id="pushon">이 폰으로 알림 받기</button></div>
  <table><thead><tr><th>고객사</th><th>상태</th><th>사용 기한</th><th>월 구독료</th><th>마지막 확인</th><th></th></tr></thead><tbody>`+
  S.customers.map(c=>{const[s,k]=stage(c,t);const lc=c.last_check;return`<tr><td><b>${esc(c.name)}</b><div class="muted">${esc(c.biz_no||'')} · 키 …${esc(c.key_tail)}${c.allow_dev?' · 개발판 허용':''}</div></td><td><span class="pill ${k}">${s}</span>${c.tamper_hold?`<div class="muted">${esc(c.tamper_note)}</div>`:''}</td><td>${c.paid_until}<div class="muted">${days(c.paid_until,t)>=0?'D-'+days(c.paid_until,t):days(t,c.paid_until)+'일 지남'}${c.readonly_extra?' · 백업 연장 '+c.readonly_extra+'일':''}</div></td><td>${won(c.fee_month)}</td><td class="muted">${lc?esc(kt(lc.at))+'<br>'+esc(lc.version||''):'아직 없음'}</td><td><button class="sm" data-open="${c.id}">관리</button></td></tr>`}).join('')+`</tbody></table></section>`;
+ const RN={system_admin:'시스템 관리자',company_admin:'회사 관리자',staff:'본사 직원',field:'현장 담당자',viewer:'조회 전용'};
+ const cn=id=>(S.customers.find(c=>c.id===id)||{}).name||'(지운 고객사)';
+ const nst=n=>n.end&&n.end<t?['끝남','']:n.start&&n.start>t?['예약','warn']:['보이는 중','ok'];
+ h+=`<section class="card"><div class="row"><h2 style="margin:0" class="sp">고객사 공지 · 로그인 팝업</h2><button class="pri" id="nadd">＋ 공지 쓰기</button></div>
+ <span class="muted">여기서 쓴 공지는 고객사 프로그램에 10분 안에 들어가고, 사용자가 로그인하면 팝업으로 뜹니다. 누가 확인했는지는 받지 않습니다.</span>
+ <table><thead><tr><th>제목</th><th>상태</th><th>기간</th><th>대상</th><th></th></tr></thead><tbody>${(S.notices||[]).map(n=>{const[s2,k2]=nst(n);return`<tr><td>${n.important?'<span class="pill bad">중요</span> ':''}<b>${esc(n.title)}</b></td><td><span class="pill ${k2}">${s2}</span></td><td class="muted">${esc(n.start||'바로')} ~ ${esc(n.end||'계속')}</td><td class="muted">${n.customers?.length?n.customers.map(cn).map(esc).join(', '):'모든 고객사'}${n.companies?.length?' · '+n.companies.map(esc).join(', '):''}${n.roles?.length?' · '+n.roles.map(r=>RN[r]).join(', '):''}</td><td><button class="sm" data-nedit="${n.id}">고치기</button></td></tr>`}).join('')||'<tr><td class="muted">아직 보낸 공지가 없습니다</td></tr>'}</tbody></table></section>`;
  h+=`<section class="card"><h3 style="margin:0">최근 기록</h3><table><tbody>${S.events.slice(0,40).map(e=>`<tr><td class="muted" style="white-space:nowrap">${esc(kt(e.at))}</td><td><span class="pill ${/위변조|미등록|DB 변조/.test(e.kind)?'bad':/새 설치/.test(e.kind)?'warn':''}">${esc(e.kind)}</span></td><td>${esc(e.text)}</td></tr>`).join('')||'<tr><td class="muted">없음</td></tr>'}</tbody></table></section>`;
  h+=`<section class="card"><h3 style="margin:0">서명 공개키 · 배포판</h3><span class="muted">공개키는 배포판에 박혀 들어갑니다 (비밀 아님). 개인키는 이 서버의 /data/keys 에만 있습니다 — 반드시 따로 백업하세요.</span><div class="mono">${esc(S.pubkey)}</div><div class="muted">등록된 배포판: ${S.versions.map(v=>esc(v.v)+' ('+v.n+'개 파일)').join(', ')||'없음'}</div><div class="row"><button id="pwc">관리 비밀번호 바꾸기</button></div></section>`;
  $('#app').innerHTML=h;
- $('#add').onclick=()=>edit();document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>detail(b.dataset.open));
+ $('#add').onclick=()=>edit();$('#nadd').onclick=()=>noticeEdit();document.querySelectorAll('[data-nedit]').forEach(b=>b.onclick=()=>noticeEdit(S.notices.find(n=>n.id===b.dataset.nedit)));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>detail(b.dataset.open));
  $('#pushon').onclick=pushOn;$('#pwc').onclick=async()=>{const p=prompt('새 관리 비밀번호 (8자 이상)');if(p)try{await call('/admin/api/password',{password:p});toast('바꿨습니다. 다시 로그인하세요');T='';loginView()}catch(e){toast(e.message)}};
 }
 function edit(c={}){$('#app').innerHTML=`<section class="card"><h2 style="margin:0">${c.id?'고객사 정보':'고객사 등록'}</h2><div class="grid">
@@ -74,6 +80,26 @@ function detail(id){const c=S.customers.find(x=>x.id===id);const[s,k]=stage(c,S.
  document.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>act('/admin/api/install',{id,iid:b.dataset.ap,approved:b.dataset.v==='1'},'바꿨습니다'));
  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>confirm('이 설치를 목록에서 지울까요?')&&act('/admin/api/install',{id,iid:b.dataset.rm,remove:true},'지웠습니다'));
  $('#off').onclick=async()=>{try{$('#otok').value=(await call('/admin/api/offline',{id,iid:$('#oiid').value.trim()})).token;$('#otok').select()}catch(e){toast(e.message)}};
+}
+function noticeEdit(n={}){const RN={system_admin:'시스템 관리자',company_admin:'회사 관리자',staff:'본사 직원',field:'현장 담당자',viewer:'조회 전용'};
+ const chk=(name,val,label,on)=>`<label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><input type="checkbox" name="${name}" value="${esc(val)}" ${on?'checked':''} style="height:auto">${esc(label)}</label>`;
+ $('#app').innerHTML=`<section class="card"><div class="row"><button class="sm" id="nbk">‹ 목록</button><h2 style="margin:0" class="sp">${n.id?'공지 고치기':'공지 쓰기'}</h2></div>
+ <label>제목<input id="n_t" maxlength="120" value="${esc(n.title)}"></label>
+ <label>내용<textarea id="n_b" rows="8" placeholder="예) 11월 20일(목) 밤 10시~11시 프로그램 점검으로 접속이 안 됩니다.">${esc(n.body)}</textarea></label>
+ <div class="grid"><label>보이기 시작<input id="n_s" type="date" value="${esc(n.start||'')}"></label><label>보이는 마지막 날<input id="n_e" type="date" value="${esc(n.end||'')}"></label></div>
+ <span class="muted">날짜를 비우면 바로 보이고, 내릴 때까지 계속 보입니다.</span>
+ <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="n_i" ${n.important?'checked':''} style="height:auto"> 중요 공지 (빨간 표시)</label>
+ <h3 style="margin:6px 0 0">받는 고객사 <span class="muted">(아무것도 안 고르면 모든 고객사)</span></h3><div class="row">${S.customers.map(c=>chk('n_c',c.id,c.name,(n.customers||[]).includes(c.id))).join('')||'<span class="muted">등록된 고객사가 없습니다</span>'}</div>
+ <h3 style="margin:6px 0 0">받는 회사 <span class="muted">(아무것도 안 고르면 모든 회사 · 고객사 프로그램이 한 번 연결돼야 회사 이름이 나옵니다)</span></h3><div class="row" id="n_cos"></div>
+ <h3 style="margin:6px 0 0">받는 역할 <span class="muted">(아무것도 안 고르면 모든 사람)</span></h3><div class="row">${Object.entries(RN).map(([k,v])=>chk('n_r',k,v,(n.roles||[]).includes(k))).join('')}</div>
+ <div class="row"><button id="ncx">취소</button>${n.id?'<button class="danger" id="ndel">공지 내리기 (지우기)</button>':''}<span class="sp"></span><button class="pri" id="nsv">${n.id?'저장':'보내기'}</button></div></section>`;
+ const picked=name=>[...document.querySelectorAll(`[name=${name}]:checked`)].map(x=>x.value);
+ const cos=()=>{const sel=picked('n_c'),keep=new Set([...picked('n_co'),...(n.companies||[])]);const names=[...new Set(S.customers.filter(c=>!sel.length||sel.includes(c.id)).flatMap(c=>c.companies||[]))];
+  $('#n_cos').innerHTML=names.map(x=>chk('n_co',x,x,keep.has(x))).join('')||'<span class="muted">아직 알려진 회사 이름이 없습니다 (모든 회사로 보냄)</span>';n.companies=[...keep].filter(x=>names.includes(x))};
+ cos();document.querySelectorAll('[name=n_c]').forEach(x=>x.onchange=cos);
+ $('#nbk').onclick=load;$('#ncx').onclick=load;
+ if($('#ndel'))$('#ndel').onclick=async()=>{if(!confirm('이 공지를 내릴까요? 고객사 화면에서도 10분 안에 사라집니다.'))return;try{await call('/admin/api/notice-delete',{id:n.id});toast('내렸습니다');load()}catch(e){toast(e.message)}};
+ $('#nsv').onclick=async()=>{try{await call('/admin/api/notice',{id:n.id,title:$('#n_t').value,body:$('#n_b').value,start:$('#n_s').value||null,end:$('#n_e').value||null,important:$('#n_i').checked,customers:picked('n_c'),companies:picked('n_co'),roles:picked('n_r')});toast(n.id?'저장했습니다':'보냈습니다 — 10분 안에 고객사 화면에 뜹니다');load()}catch(e){toast(e.message)}};
 }
 async function pushOn(){try{if(!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('이 브라우저는 알림을 지원하지 않습니다 (아이폰은 홈 화면에 추가 후)');
  if(await Notification.requestPermission()!=='granted')throw new Error('알림 허락이 필요합니다');const r=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;

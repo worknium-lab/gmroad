@@ -308,5 +308,26 @@ check('라이선스 행을 지우면 차단', await mode() === 'blocked');
 await q(`insert into gm.license_state (id) values (1)`);
 check('다시 정상', await mode() === 'normal');
 
+// --- 012 워크니움 공지 · 참고 현장 ---
+await q(`insert into gm.vendor_notices (id, title, target_companies, target_roles, starts_at, ends_at) values
+ ('n-all','전체 공지','{}','{}',null,null),
+ ('n-co','지엠로드만',array[(select name from gm.companies where id=$1)],'{}',null,null),
+ ('n-field','현장만','{}','{field}',null,null),
+ ('n-old','끝난 공지','{}','{}',null, now() - interval '1 day'),
+ ('n-later','예약 공지','{}','{}', now() + interval '1 day', null)`, [co[0].id]);
+const vn = async (u) => (await as(u, () => q(`select id from gm.vendor_notices order by id`))).rows.map((r) => r.id).join(',');
+check('공지: 본사 직원은 전체 + 자기 회사', await vn(ids.staff) === 'n-all,n-co');
+check('공지: 현장 담당자는 현장 공지도', await vn(ids.field) === 'n-all,n-co,n-field');
+check('공지: 다른 회사는 전체 공지만', await vn(ids.other) === 'n-all');
+err = null;
+try { await as(ids.admin, () => q(`insert into gm.vendor_notices (id, title) values ('x','가짜')`)); } catch (e) { err = e; }
+check('공지: 화면에서는 공지를 만들 수 없음', !!err);
+const p2 = await asCommit(ids.admin, async () => (await q(`insert into gm.projects (company_id, name, client) values ($1,'신궁1육교','발주처') returning id`, [co[0].id])).rows[0].id);
+await asCommit(ids.admin, () => q(`insert into gm.projects (company_id, name, client) values ($1,'타사 현장','발주처')`, [co[1].id]));
+const refs = async (u) => (await as(u, () => q(`select name from gm.projects where client='발주처' and id <> $1 order by name`, [pid]))).rows.map((r) => r.name).join(',');
+check('참고 현장: 관리자는 같은 발주처 현장 모두', await refs(ids.admin) === '신궁1육교,타사 현장');
+check('참고 현장: 직원은 볼 수 있는 현장만 (배정 안 된 현장 · 타사 안 보임)', await refs(ids.staff) === '');
+await q(`delete from gm.projects where id <> $1 and client='발주처'`, [pid]);
+
 await c.end();
 await db.stop();

@@ -1,4 +1,5 @@
 import { PushNudge } from '../components/PushCard';
+import { NoticeList } from '../lib/notices';
 import { useNavigate } from 'react-router-dom';
 import { sb, q } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -16,6 +17,7 @@ export default function Notifications() {
     <>
       <div className="row between"><h1>알림</h1><button className="btn sm" onClick={readAll}>모두 읽음</button></div>
       <PushNudge />
+      <NoticeList />
       <section className="card">
         {!data?.length ? <Empty>알림이 없습니다.</Empty> : data.map((n) => (
           <button key={n.id} onClick={() => open(n)} className="row" style={{ border: 0, borderTop: '1px solid var(--line-2)', background: 'none', padding: '12px 0', textAlign: 'left', cursor: 'pointer', width: '100%' }}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { sb, q } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { Project, Sub } from '../lib/data';
@@ -19,12 +19,15 @@ export default function ProjectForm({ project, onClose, onSaved }: { project?: P
   const [subs, setSubs] = useState<Sub[]>(project?.project_subcontracts?.length ? project.project_subcontracts : [{ name: '', amount: 0, is_patent: false }]);
   const [busy, setBusy] = useState(false);
   const set = (k: string, v: any) => setF((x) => ({ ...x, [k]: v }));
+  // 발주처는 이미 쓴 이름에서 고르게 (이름이 조금씩 달라지면 참고 현장이 안 묶임). 새 발주처는 그대로 입력
+  const [clients, setClients] = useState<string[]>([]);
+  useEffect(() => { sb.from('projects').select('client').not('client', 'is', null).then(({ data }) => setClients([...new Set((data || []).map((r: any) => String(r.client).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko')))); }, []);
 
   const save = async () => {
     if (!f.name.trim()) return toast('공사명을 넣어 주세요');
     setBusy(true);
     try {
-      const row = { ...f, start_date: f.start_date || null, end_date: f.end_date || null, prime_amount: num(String(f.prime_amount)) };
+      const row = { ...f, client: f.client.trim().replace(/\s+/g, ' ') || null, start_date: f.start_date || null, end_date: f.end_date || null, prime_amount: num(String(f.prime_amount)) };
       let id = project?.id;
       if (id) await q(sb.from('projects').update(row).eq('id', id));
       else id = (await q<any>(sb.from('projects').insert({ ...row, created_by: profile!.id }).select('id').single())).id;
@@ -47,7 +50,8 @@ export default function ProjectForm({ project, onClose, onSaved }: { project?: P
         <div className="field"><label htmlFor="pf-st">상태</label>
           <select id="pf-st" className="input" value={f.status} onChange={(e) => set('status', e.target.value)}>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div className="field full"><label htmlFor="pf-name">공사명</label><input id="pf-name" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} /></div>
-        <div className="field"><label htmlFor="pf-cl">발주처</label><input id="pf-cl" className="input" value={f.client} onChange={(e) => set('client', e.target.value)} /></div>
+        <div className="field"><label htmlFor="pf-cl">발주처</label><input id="pf-cl" className="input" list="pf-cl-list" placeholder="목록에서 고르거나 새로 입력" value={f.client} onChange={(e) => set('client', e.target.value)} autoComplete="off" />
+          <datalist id="pf-cl-list">{clients.map((c) => <option key={c} value={c} />)}</datalist></div>
         <div className="field"><label htmlFor="pf-pm">특허반영공법</label><input id="pf-pm" className="input" value={f.patent_method} onChange={(e) => set('patent_method', e.target.value)} /></div>
         <div className="field"><label htmlFor="pf-pc">도급사</label><input id="pf-pc" className="input" value={f.prime_contractor} onChange={(e) => set('prime_contractor', e.target.value)} /></div>
         <div className="field"><label htmlFor="pf-pa">도급금액 (원)</label><input id="pf-pa" className="input num" inputMode="numeric" value={Number(f.prime_amount).toLocaleString('ko-KR')} onChange={(e) => set('prime_amount', num(e.target.value))} /></div>

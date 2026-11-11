@@ -27,7 +27,7 @@ const PUB = rawFromPub(crypto.createPublicKey(PRIV));
 /* ---------- 저장 (JSON 파일, 바꿀 때마다 통째로 안전하게 씀) ---------- */
 const DBF = path.join(DATA, 'db.json');
 const db = fs.existsSync(DBF) ? JSON.parse(fs.readFileSync(DBF, 'utf8')) : {};
-db.customers ||= []; db.events ||= []; db.manifests ||= {}; db.push ||= [];
+db.customers ||= []; db.events ||= []; db.manifests ||= {}; db.push ||= []; db.notices ||= [];
 db.secret ||= crypto.randomBytes(32).toString('hex');
 if (!db.vapid) { const k = webpush.generateVAPIDKeys(); db.vapid = k; }
 if (!db.admin && process.env.LICENSE_ADMIN_PASSWORD) db.admin = hashPw(process.env.LICENSE_ADMIN_PASSWORD);
@@ -67,7 +67,7 @@ function payloadFor(c, iid, extra = {}) {
 
 /** 고객사 서버의 하루 1번 확인 */
 function check(b, ip) {
-  const c = db.customers.find((x) => x.key && b.key && crypto.timingSafeEqual(Buffer.from(sha(x.key)), Buffer.from(sha(String(b.key)))));
+  const c = findCustomer(b.key);
   if (!c) throw [403, '등록되지 않은 고객 키입니다'];
   if (!/^[0-9a-f-]{36}$/.test(String(b.iid))) throw [400, '설치 번호가 없습니다'];
   c.installs ||= [];
@@ -106,6 +106,31 @@ function check(b, ip) {
   return { token: issue(payloadFor(c, b.iid, { tampered, note: notes.join(' · ') }), PRIV, PUB) };
 }
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
+const findCustomer = (key) => db.customers.find((x) => x.key && key && crypto.timingSafeEqual(Buffer.from(sha(x.key)), Buffer.from(sha(String(key)))));
+
+/* ---------- 고객사 공지 (로그인 팝업) ---------- */
+const ROLES = ['system_admin', 'company_admin', 'staff', 'field', 'viewer'];
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+const nextDay = (d) => new Date(Date.parse(d + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+/** 고객사 서버가 10분마다 가져감. 그 회사들 이름을 같이 알려 줘서 관리 화면에서 회사를 고를 수 있게 함 */
+function noticesFor(b) {
+  const c = findCustomer(b.key);
+  if (!c) throw [403, '등록되지 않은 고객 키입니다'];
+  const names = Array.isArray(b.companies) ? b.companies.map((x) => String(x).slice(0, 60)).filter(Boolean).slice(0, 50) : [];
+  if (names.length && JSON.stringify(names) !== JSON.stringify(c.companies || [])) { c.companies = names; save(); }
+  const today = kstToday();
+  return {
+    notices: db.notices
+      .filter((n) => !n.customers?.length || n.customers.includes(c.id))
+      .filter((n) => !n.end || n.end >= today)
+      .map((n) => ({
+        id: n.id, title: n.title, body: n.body, important: !!n.important,
+        starts_at: n.start ? n.start + 'T00:00:00+09:00' : null,
+        ends_at: n.end ? nextDay(n.end) + 'T00:00:00+09:00' : null,
+        target_companies: n.companies || [], target_roles: n.roles || [], posted_at: n.created_at,
+      })),
+  };
+}
 
 /* ---------- 관리 (로그인) ---------- */
 const sessions = new Map();
@@ -123,7 +148,32 @@ const admin = {
   'GET /admin/api/state': () => ({
     pubkey: PUB, vapid: db.vapid.publicKey, today: kstToday(), versions: Object.keys(db.manifests).map((v) => ({ v, at: db.manifests[v].at, n: Object.keys(db.manifests[v].files).length })),
     customers: db.customers.map(({ key, ...c }) => ({ ...c, key_tail: key.slice(-4) })), events: db.events.slice(0, 200),
+    notices: db.notices,
   }),
+  'POST /admin/api/notice': (b) => {
+    const title = String(b.title || '').trim().slice(0, 120);
+    if (!title) throw [400, '공지 제목을 넣으세요'];
+    if (b.start && !isDate(b.start)) throw [400, '시작일 형식'];
+    if (b.end && !isDate(b.end)) throw [400, '종료일 형식'];
+    if (b.start && b.end && b.end < b.start) throw [400, '종료일이 시작일보다 빠릅니다'];
+    const known = new Set(db.customers.map((c) => c.id));
+    const row = {
+      title, body: String(b.body || '').slice(0, 5000), important: !!b.important, start: b.start || null, end: b.end || null,
+      customers: (Array.isArray(b.customers) ? b.customers : []).filter((x) => known.has(x)),
+      companies: (Array.isArray(b.companies) ? b.companies : []).map((x) => String(x).slice(0, 60)).filter(Boolean),
+      roles: (Array.isArray(b.roles) ? b.roles : []).filter((x) => ROLES.includes(x)),
+      updated_at: new Date().toISOString(),
+    };
+    let n = b.id && db.notices.find((x) => x.id === b.id);
+    if (n) Object.assign(n, row);
+    else { n = { id: 'n-' + crypto.randomBytes(6).toString('hex'), created_at: row.updated_at, ...row }; db.notices.unshift(n); }
+    event(null, '공지', `${b.id ? '수정' : '보냄'}: ${title}`); save();
+    return { id: n.id };
+  },
+  'POST /admin/api/notice-delete': (b) => {
+    const n = db.notices.find((x) => x.id === b.id); if (!n) throw [404, '공지가 없습니다'];
+    db.notices = db.notices.filter((x) => x.id !== b.id); event(null, '공지', `내림: ${n.title}`); save(); return { ok: true };
+  },
   'POST /admin/api/customer': (b) => {
     let c = b.id && db.customers.find((x) => x.id === b.id);
     const fields = ['name', 'biz_no', 'contact', 'fee_setup', 'fee_month', 'memo', 'allow_dev'];
@@ -187,6 +237,7 @@ export const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/sw.js') return send(res, 200, `self.addEventListener('push',e=>{const d=e.data?e.data.json():{};e.waitUntil(self.registration.showNotification(d.title||'라이선스',{body:d.body||''}))});self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.openWindow('/'))});`, 'text/javascript');
     if (req.method === 'GET' && p === '/lic/v1/pubkey') return send(res, 200, { pubkey: PUB });
     if (req.method === 'POST' && p === '/lic/v1/check') return send(res, 200, check(await body(req), ip));
+    if (req.method === 'POST' && p === '/lic/v1/notices') return send(res, 200, noticesFor(await body(req)));
     if (req.method === 'POST' && p === '/admin/api/login') { await new Promise((r) => setTimeout(r, 400)); return send(res, 200, login(await body(req))); }
     const fn = admin[`${req.method} ${p}`];
     if (!fn) throw [404, 'not found'];

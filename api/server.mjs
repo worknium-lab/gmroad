@@ -12,6 +12,7 @@ import { productRoutes } from './products/routes.mjs';
 import { photoRoutes } from './photos/routes.mjs';
 import { spaceRoutes, shareDownload, startSpaceWorker } from './space/routes.mjs';
 import { resume } from './meetings/process.mjs';
+import { startNoticeWorker } from './notices/sync.mjs';
 
 const PORT = Number(process.env.PORT || 3001);
 const PROFILE_FIELDS = ['name', 'company_id', 'role', 'emp_no', 'dept', 'rank', 'position', 'phone', 'email', 'address', 'hire_date', 'active'];
@@ -105,4 +106,4 @@ http.createServer(async (req, res) => {
     if (Array.isArray(e)) return send(res, e[0], { error: e[1] });
     console.error(e); send(res, 500, { error: String(e.message || e) });
   }
-}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); startPushWorker(); startLicenseWorker(); });
+}).listen(PORT, () => { console.log(`GM API listening on :${PORT}`); setTimeout(() => resume().catch((e) => console.error('회의록 이어서 처리 실패', e.message)), 3000); startSpaceWorker(); startPushWorker(); startLicenseWorker(); startNoticeWorker(); });

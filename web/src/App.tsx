@@ -28,6 +28,7 @@ import { LicenseProvider, LicenseBanner, LicenseBlocked, useLicense } from './li
 import { ProductDashboard, ProductList, ProductDetail, DeliveryPage } from './pages/products/Products';
 import { PhotoHome, PhotoAlbum } from './pages/photos/PhotoApp';
 import { SheetList, SheetEditor } from './pages/photos/PhotoSheet';
+import { VendorNoticePopup } from './lib/notices';
 
 function Gate() {
   const { session, profile, loading, isAdmin } = useAuth();
@@ -44,6 +45,8 @@ function Gate() {
   if (fieldOnly && !loc.pathname.startsWith('/field') && !loc.pathname.startsWith('/space') && !loc.pathname.startsWith('/photos') && loc.pathname !== '/me' && loc.pathname !== '/notifications') return <Navigate to="/field" replace />;
 
   return (
+    <>
+    <VendorNoticePopup />
     <Routes>
       <Route path="/field" element={<FieldShell><FieldToday /></FieldShell>} />
       <Route path="/field/qty" element={<FieldShell title="수량 입력" back="/field"><FieldQty /></FieldShell>} />
@@ -80,6 +83,7 @@ function Gate() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes></Shell>} />
     </Routes>
+    </>
   );
 }
 
