@@ -22,4 +22,4 @@
 완료: ④ 내역서 · ⑨ 노무비 · ⑩ 회의록 · 공용공간 · 사진 앱(/photos) · 제품 · 실적(/products) · 앱 푸시(api/push, gm.notifications → 5초 폴링).
 완료(계속): 라이선스(licensing/server = WORKNIUM 쪽, api/license = 고객 쪽, 011 DB 잠금, scripts/release.sh).
 완료(11월): 참고 현장(RefSites, 발주처 기준) · 워크니움 공지 팝업(라이선스 서버 db.notices → /lic/v1/notices → api/notices/sync.mjs 10분 → gm.vendor_notices → lib/notices.tsx).
-남은 것: 메신저(설계만), 위치별 구조화 AI(Claude API), CALS 공고 메뉴(사이트가 자동 수집을 막음 — 방법 정해지면).
+남은 것: 메신저(설계만), 위치별 구조화 AI(Claude API). (CALS 공고 메뉴는 제외하기로 함 — 사이트가 자동 수집을 막음)
