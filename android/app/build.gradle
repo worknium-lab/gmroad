@@ -1,0 +1,38 @@
+plugins { id 'com.android.application' }
+
+def gmUrl = project.findProperty('gmUrl')
+def u = new URI(gmUrl)
+def site = u.port > 0 ? "${u.scheme}://${u.host}:${u.port}" : "${u.scheme}://${u.host}"
+def runNo = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+
+android {
+  namespace 'kr.worknium.gmroad'
+  compileSdk 34
+  defaultConfig {
+    applicationId 'kr.worknium.gmroad'
+    minSdk 21
+    targetSdk 34
+    versionCode runNo
+    versionName "1.0.${runNo}"
+    resValue 'string', 'launch_url', gmUrl
+    resValue 'string', 'asset_statements', "[{\\\"relation\\\": [\\\"delegate_permission/common.handle_all_urls\\\"], \\\"target\\\": {\\\"namespace\\\": \\\"web\\\", \\\"site\\\": \\\"${site}\\\"}}]"
+    manifestPlaceholders = [hostName: u.host, hostPort: (u.port > 0 ? u.port : 443).toString()]
+  }
+  signingConfigs {
+    // 서명키는 저장소에 넣지 않음: GitHub 비밀값(ANDROID_KEYSTORE_B64 · ANDROID_KEYSTORE_PASSWORD)에서 빌드 때만 꺼냄
+    release {
+      storeFile file(System.getenv('GM_KEYSTORE') ?: '../gm-release.jks')
+      storePassword System.getenv('GM_KEYSTORE_PASSWORD')
+      keyAlias 'gm'
+      keyPassword System.getenv('GM_KEYSTORE_PASSWORD')
+    }
+  }
+  buildTypes {
+    release { minifyEnabled false; signingConfig signingConfigs.release }
+  }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies {
+  implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

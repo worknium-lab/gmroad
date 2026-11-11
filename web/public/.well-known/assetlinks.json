@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kr.worknium.gmroad",
+    "sha256_cert_fingerprints": ["35:B0:95:8B:B9:BE:51:5A:43:0E:72:75:E0:55:40:8E:F3:A1:B5:94:45:5A:7B:65:0A:C8:A1:2A:13:BE:79:9B"]
+  }
+}]

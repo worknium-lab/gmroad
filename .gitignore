@@ -4,3 +4,11 @@ dist/
 backups/
 *.log
 .DS_Store
+
+# 안드로이드 빌드 결과 · 서명키 (서명키는 절대 올리지 말 것)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore

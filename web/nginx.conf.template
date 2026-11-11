@@ -13,6 +13,7 @@ server {
   index index.html;
 
   location = /config.js { add_header Cache-Control "no-store"; }
+  location = /.well-known/assetlinks.json { default_type application/json; add_header Cache-Control "no-cache"; }   # 안드로이드 앱(TWA) 확인용
   location = /sw.js     { add_header Cache-Control "no-cache"; }
   location /assets/     { add_header Cache-Control "public, max-age=31536000, immutable"; }
 
