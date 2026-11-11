@@ -329,5 +329,14 @@ check('참고 현장: 관리자는 같은 발주처 현장 모두', await refs(i
 check('참고 현장: 직원은 볼 수 있는 현장만 (배정 안 된 현장 · 타사 안 보임)', await refs(ids.staff) === '');
 await q(`delete from gm.projects where id <> $1 and client='발주처'`, [pid]);
 
+// --- 계정 초기화 (scripts/reset-accounts.sql) ---
+await q(`insert into auth.users values ('00000000-0000-0000-0000-0000000000aa', 'someone@hobis.app')`);
+const before = (await q(`select count(*)::int n from gm.projects`)).rows[0].n;
+await q(fs.readFileSync('../scripts/reset-accounts.sql', 'utf8'));
+check('계정 초기화: GM 계정 모두 지워짐', (await q(`select count(*)::int n from gm.profiles`)).rows[0].n === 0 && (await q(`select count(*)::int n from auth.users where email like '%@gm.local'`)).rows[0].n === 0);
+check('계정 초기화: 다른 앱 계정은 그대로', (await q(`select count(*)::int n from auth.users where email = 'someone@hobis.app'`)).rows[0].n === 1);
+check('계정 초기화: 프로젝트 자료는 그대로', (await q(`select count(*)::int n from gm.projects`)).rows[0].n === before && before > 0);
+check('계정 초기화: 작성자 칸만 비워짐', (await q(`select count(*)::int n from gm.projects where created_by is not null`)).rows[0].n === 0);
+
 await c.end();
 await db.stop();
