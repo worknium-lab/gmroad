@@ -106,7 +106,7 @@ export function UnitPanel({ rev, draft, rate, ucs, qs, used, onChange }: { rev: 
 
 /* ---------- 단가 자료 (기준 엑셀) ---------- */
 const refsCache = new Map<string, Promise<any>>();
-const useRefs = (revId: string) => useLoad(() => { if (!refsCache.has(revId)) refsCache.set(revId, api('/api/boq/refs', { revision_id: revId }).catch((e) => { refsCache.delete(revId); throw e; })); return refsCache.get(revId)!; }, [revId]);
+export const useRefs = (revId: string) => useLoad(() => { if (!refsCache.has(revId)) refsCache.set(revId, api('/api/boq/refs', { revision_id: revId }).catch((e) => { refsCache.delete(revId); throw e; })); return refsCache.get(revId)!; }, [revId]);
 
 function BlockPicker({ rev, onClose, onPick }: { rev: any; onClose: () => void; onPick: (b: any) => void }) {
   const refs = useRefs(rev.id);

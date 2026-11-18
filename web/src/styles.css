@@ -398,3 +398,15 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 .boq-kv span { color: var(--sub); }
 .boq-cost { grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr); align-items: start; }
 @media (max-width: 900px) { .boq-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .boq-cost { grid-template-columns: 1fr; } }
+.boq-side { grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
+.boq-list { display: flex; flex-direction: column; max-height: 640px; overflow-y: auto; }
+.boq-list button { display: flex; justify-content: space-between; gap: 10px; text-align: left; padding: 10px 14px; min-height: 44px; border: 0; border-top: 1px solid var(--line-2); background: #fff; cursor: pointer; font: inherit; color: inherit; }
+.boq-list button:first-child { border-top: 0; }
+.boq-list button:hover { background: #FAFBFC; }
+.boq-list button.on { background: var(--blue-ll); box-shadow: inset 3px 0 0 var(--blue); }
+.boq-list .t { display: flex; flex-direction: column; min-width: 0; }
+.boq-list .t b { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.boq-list small { font-size: 12px; color: var(--sub-2); }
+.boq-list .v { display: flex; flex-direction: column; align-items: flex-end; flex: none; font-size: 13px; }
+.boq-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); margin-left: 6px; vertical-align: 1px; }
+@media (max-width: 900px) { .boq-side { grid-template-columns: 1fr; } .boq-list { max-height: 320px; } }

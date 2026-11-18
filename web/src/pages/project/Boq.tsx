@@ -1,9 +1,10 @@
-// ④ 내역서 — 안쪽 탭: 한눈에(흐름 · 남은 일 · 가져오기 · 이력) / 내역서(공종별 내역) / 원가계산서
+// ④ 내역서 — 안쪽 탭: 한눈에(흐름 · 남은 일 · 가져오기 · 이력) / 내역서(공종별 내역) / 원가계산서 / 일위대가 · 단가(BoqBasis)
 //   엑셀 원본이 기준이고, 적산 엔진(lib/estimate)은 같은 규칙으로 다시 계산해 검산합니다.
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, q, sb } from '../../lib/supabase';
 import { verify, summaryAmt, shortRef } from '../../lib/boqSheet';
+import BoqBasis from './BoqBasis';
 import { download } from '../../lib/files';
 import { dt, qty, won } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Empty, Pill, Modal } from '../../lib/ui';
@@ -18,14 +19,14 @@ const nospace = (s: string) => (s || '').replace(/\s+/g, '');
 const pctS = (v: number, d = 3) => (v * 100).toFixed(d) + '%';
 
 type Rev = any; type Item = any;
-type View = 'flow' | 'boq' | 'cost';
-const VIEWS: [View, string][] = [['flow', '한눈에'], ['boq', '내역서'], ['cost', '원가계산서']];
+type View = 'flow' | 'boq' | 'cost' | 'basis';
+const VIEWS: [View, string][] = [['flow', '한눈에'], ['boq', '내역서'], ['cost', '원가계산서'], ['basis', '일위대가 · 단가']];
 
 export default function Boq({ pid, p }: { pid: string; p: any }) {
   const toast = useToast();
   const [sp, setSp] = useSearchParams();
   const asked = VIEWS.find(([k]) => k === sp.get('v'))?.[0];
-  const go = (v: View, id?: string) => { if (id) setSel(id); const n = new URLSearchParams(sp); n.set('v', v); setSp(n, { replace: true }); };
+  const go = (v: View, id?: string, find?: string) => { if (id) setSel(id); const n = new URLSearchParams(sp); n.set('v', v); if (find) n.set('q', find); else n.delete('q'); setSp(n, { replace: true }); };
   const revs = useLoad(() => q<Rev[]>(sb.from('boq_revisions').select('*, profiles:created_by(name, username)').eq('project_id', pid).order('created_at')), [pid]);
   const docs = useLoad(() => q<any[]>(sb.from('documents').select('*').eq('project_id', pid).in('category', ['design_boq', 'contract']).order('created_at', { ascending: false })), [pid]);
   const [sel, setSel] = useState<string | null>(null);
@@ -113,8 +114,9 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
 
       {view !== 'flow' && !cur && <Empty>아직 내역서가 없습니다. <button className="link" onClick={() => go('flow')}>한눈에</button> 탭에서 설계내역서 엑셀을 가져오세요.</Empty>}
       {view === 'boq' && cur && cur.kind === 'change' && <ChangeView key={cur.id} rev={cur} rate={rate} onChanged={refresh} onDelete={() => doDelete(cur)} />}
-      {view === 'boq' && cur && cur.kind !== 'change' && <RevView key={cur.id} rev={cur} base={list.find((r) => r.id === cur.base_id && r.kind !== 'change')} onDelete={() => doDelete(cur)} onChanged={refresh} />}
+      {view === 'boq' && cur && cur.kind !== 'change' && <RevView key={cur.id + (sp.get('q') || '')} rev={cur} initFind={sp.get('q') || ''} base={list.find((r) => r.id === cur.base_id && r.kind !== 'change')} onDelete={() => doDelete(cur)} onChanged={refresh} />}
       {view === 'cost' && cur && <CostView key={cur.id} rev={cur} base={list.find((r) => r.id === cur.base_id)} />}
+      {view === 'basis' && cur && <BoqBasis key={cur.id} rev={cur} rate={rate} onFind={(name) => go('boq', undefined, name)} />}
       {view === 'boq' && cur && <BoqLogs pid={pid} revId={cur.id} stamp={stamp + (revs.data?.length || 0)} />}
       {mkChange && <ChangeCreate p={p} bases={changeBases} onClose={() => setMkChange(false)} onDone={(id) => { setMkChange(false); refresh(id); toast('변경내역서를 만들었습니다'); }} />}
       {pwOpen && <PasswordModal defaultCompany={p.company_id || profile?.company_id} onClose={() => setPwOpen(false)} />}
@@ -126,7 +128,7 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
 }
 
 /* ---------- 한 차수 보기 ---------- */
-function RevView({ rev, base, onDelete, onChanged }: { rev: Rev; base?: Rev; onDelete: () => void; onChanged: (id?: string) => void }) {
+function RevView({ rev, base, initFind, onDelete, onChanged }: { rev: Rev; base?: Rev; initFind?: string; onDelete: () => void; onChanged: (id?: string) => void }) {
   const toast = useToast();
   const [unlock, setUnlock] = useState(false);
   const confirmIt = async () => {
@@ -139,7 +141,7 @@ function RevView({ rev, base, onDelete, onChanged }: { rev: Rev; base?: Rev; onD
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const calc = useMemo(() => (items.data ? verify(items.data) : null), [items.data]);
   const [showDiff, setShowDiff] = useState(false);
-  const [find, setFind] = useState('');
+  const [find, setFind] = useState(initFind || '');
   const t = rev.totals || {};
   const bt = base?.totals || {};
   const baseMap = useMemo(() => new Map((baseItems.data || []).map((i: Item) => [i.row, i])), [baseItems.data]);
