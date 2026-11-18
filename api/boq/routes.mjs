@@ -7,6 +7,7 @@ import { buildContract } from './contract.mjs';
 import { buildChange } from './change.mjs';
 import { collectRefs } from './refs.mjs';
 import { buildSheetXlsx, checkDoc } from './sheetXlsx.mjs';
+import { buildWageUpdate } from './wage.mjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const BUCKET = 'project-files';
@@ -202,6 +203,33 @@ export const boqRoutes = {
       created_by: me.id,
     }, r.after.items);
     await log(rev, me, '도급내역서 생성', null, { rate, contract: r.result.reached ?? r.result.afterRate, profitRate: r.result.profitRate });
+    return { revision_id: rev.id, result: r.result };
+  },
+
+  // 노임 일괄 갱신: 설계내역서의 노임 단가만 바꿔 새 설계내역서 버전으로 (원본은 그대로)
+  'POST /api/boq/wage-update': async (me, b) => {
+    const { data: base } = await admin.from('boq_revisions').select('*').eq('id', b.revision_id).single();
+    if (!base) throw [404, '설계내역서가 없습니다'];
+    await canBoq(me, base.project_id);
+    if (!['system_admin', 'company_admin', 'staff'].includes(me.role)) throw [403, '본사 계정만 할 수 있습니다'];
+    if (base.kind !== 'design') throw [400, '노임 갱신은 설계내역서에서만 합니다 (도급 계약 뒤에는 단가가 고정됩니다)'];
+    const wages = (Array.isArray(b.wages) ? b.wages : []).filter((w) => w && typeof w.f === 'string').slice(0, 2000);
+    if (!wages.length) throw [400, '바꿀 노임이 없습니다'];
+    const r = await buildWageUpdate(await fileBuf(base.storage_path), { sheet: base.sheet_name, headerRow: base.header_row, wages });
+    if (b.dry_run) return { result: r.result };
+    if (!r.result.changed.length) throw [400, '바뀐 노임이 없습니다'];
+    const label = String(b.label || '노임 갱신').slice(0, 40);
+    const out = await r.makeFile();
+    const { count } = await admin.from('boq_revisions').select('id', { count: 'exact', head: true }).eq('project_id', base.project_id).eq('kind', 'design');
+    const path = `${base.project_id}/boq/${Date.now()}_design_wage.xlsx`;
+    await putFile(path, out);
+    const rev = await saveRevision({
+      project_id: base.project_id, kind: 'design', seq: (count || 0) + 1, title: `설계내역서 (${label})`, base_id: base.id,
+      storage_path: path, file_name: base.file_name.replace(/\.xlsx?$/i, '') + `_${label.replace(/[\\/:*?"<>|\s]+/g, '_')}.xlsx`, sheet_name: base.sheet_name, header_row: base.header_row,
+      col_map: r.after.cm, totals: totalsOf(r.after.totals), params: { wage_update: { label, from: base.title, changed: r.result.changed.length, before: r.result.before, after: r.result.after } },
+      status: 'confirmed', locked: true, created_by: me.id,
+    }, r.after.items);
+    await log(rev, me, '노임 갱신', null, { from: base.title, changed: r.result.changed.length, contract: r.result.after.contract });
     return { revision_id: rev.id, result: r.result };
   },
 

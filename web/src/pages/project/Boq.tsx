@@ -127,7 +127,7 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
       {view === 'phase' && workBase && <BoqPhase key={workBase.id} base={workBase} canEdit={canEdit} />}
       {view === 'prog' && workBase && <BoqRounds key={workBase.id} pid={pid} base={workBase} canEdit={canEdit} isAdmin={isAdmin} />}
       {view === 'sub' && workBase && <BoqSub key={workBase.id} pid={pid} p={p} base={workBase} canEdit={canEdit} isAdmin={isAdmin} />}
-      {view === 'basis' && cur && <BoqBasis key={cur.id} rev={cur} rate={rate} onFind={(name) => go('boq', undefined, name)} />}
+      {view === 'basis' && cur && <BoqBasis key={cur.id} rev={cur} rate={rate} onFind={(name) => go('boq', undefined, name)} onCreated={(id) => refresh(id)} />}
       {view === 'boq' && cur && <BoqLogs pid={pid} revId={cur.id} stamp={stamp + (revs.data?.length || 0)} />}
       {mkChange && <ChangeCreate p={p} bases={changeBases} onClose={() => setMkChange(false)} onDone={(id) => { setMkChange(false); refresh(id); toast('변경내역서를 만들었습니다'); }} />}
       {pwOpen && <PasswordModal defaultCompany={p.company_id || profile?.company_id} onClose={() => setPwOpen(false)} />}
