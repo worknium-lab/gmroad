@@ -61,10 +61,15 @@ h1 { font-size: 26px; } h2 { font-size: 17px; } h3 { font-size: 15px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .grid { display: grid; gap: 16px; }
+/* 반응형 칸 나누기: style={{ '--cols': '...' }} (PC) / '--cols-m' (폰, 기본 한 줄) / '--cols-t' (태블릿, 기본은 PC와 같음) */
+.rgrid { display: grid; gap: 16px; grid-template-columns: var(--cols, 1fr); }
+@media (max-width: 1000px) { .rgrid.split { grid-template-columns: var(--cols-t, 1fr); } }
+@media (max-width: 700px) { .rgrid { grid-template-columns: var(--cols-m, minmax(0, 1fr)); } }
 .g2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 .g3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .g4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 @media (max-width: 900px) { .g2 { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
 .stat .l { font-size: 13px; color: var(--sub-2); } .stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; } .stat .s { font-size: 12px; color: var(--sub); }
 
@@ -100,7 +105,14 @@ h1 { font-size: 26px; } h2 { font-size: 17px; } h3 { font-size: 15px; }
 .tbl-wrap { overflow-x: auto; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th { background: var(--head); color: var(--sub); font-size: 12px; font-weight: 500; text-align: left; padding: 10px 12px; white-space: nowrap; }
-.tbl td { padding: 11px 12px; border-top: 1px solid var(--line-2); vertical-align: top; }
+.tbl td { padding: 11px 12px; border-top: 1px solid var(--line-2); vertical-align: top; word-break: keep-all; }
+/* 폰: 글자를 한 글자씩 쪼개지 말고 표를 옆으로 밀어 보게 함. 숫자 · 날짜 칸은 한 줄 */
+@media (max-width: 700px) {
+  .tbl th, .tbl td { padding-left: 10px; padding-right: 10px; }
+  .tbl-wrap .tbl td { min-width: 4.5em; }
+  .tbl td.r, .tbl td.c, .tbl td.nw { white-space: nowrap; }
+  .tbl-wrap { margin: 0 -4px; }
+}
 .tbl .r { text-align: right; font-variant-numeric: tabular-nums; } .tbl .c { text-align: center; }
 .tbl tr.click { cursor: pointer; } .tbl tr.click:hover td { background: #FAFBFC; }
 .tbl tfoot td { border-top: 2px solid var(--text); font-weight: 700; }

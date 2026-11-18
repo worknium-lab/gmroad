@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, q, sb } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { dt } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Pill, FileDrop, Seg } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox, Pill, FileDrop, Seg, cols } from '../../lib/ui';
 import { KIND, myPosts, myReads, spaceDownload, spaceUpload, kb } from '../../lib/space';
 
 const linkify = (t: string) => t.split(/(https?:\/\/[^\s]+)/g).map((x, i) => (/^https?:\/\//.test(x) ? <a key={i} href={x} target="_blank" rel="noreferrer">{x}</a> : x));
@@ -208,7 +208,7 @@ export function PostEdit() {
   return (
     <>
       <nav className="crumb"><Link to="/space/board">게시판</Link> › {id ? '고치기' : '글쓰기'}</nav>
-      <div className="g2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16, alignItems: 'start' }}>
+      <div className="rgrid" style={{ ...cols('minmax(0, 1fr) 320px'), alignItems: 'start' }}>
         <section className="card">
           <Seg label="분류" value={v.kind} onChange={(k) => set({ kind: k })} items={[['notice', '공지사항'], ['memo', '전달사항']]} />
           <div className="field"><label htmlFor="pt">제목</label><input id="pt" className="input" value={v.title} onChange={(e) => set({ title: e.target.value })} /></div>

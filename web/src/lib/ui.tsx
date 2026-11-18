@@ -1,6 +1,9 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { signedUrls } from './files';
 
+/** 반응형 칸 나누기 (className="rgrid"와 함께): PC 칸 구성, 폰(700px 이하) 칸 구성 — 기본은 한 줄씩 */
+export const cols = (pc: string, mobile?: string) => ({ '--cols': pc, ...(mobile ? { '--cols-m': mobile } : {}) } as React.CSSProperties);
+
 /* ---------- 토스트 ---------- */
 const T = createContext<(m: string) => void>(() => {});
 export const useToast = () => useContext(T);

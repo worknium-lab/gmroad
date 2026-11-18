@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { sb, q } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { qty, dateK } from '../../lib/format';
-import { useLoad, Loading, Empty, useSigned, useToast } from '../../lib/ui';
+import { useLoad, Loading, Empty, useSigned, useToast, cols } from '../../lib/ui';
 
 export default function Materials({ pid }: { pid: string }) {
   const { canEdit } = useAuth();
@@ -38,7 +38,7 @@ export default function Materials({ pid }: { pid: string }) {
           <input aria-label="설계수량" className="input num" style={{ width: 120 }} placeholder="설계수량" value={nf.design_qty} onChange={(e) => setNf({ ...nf, design_qty: e.target.value })} />
           <button className="btn pri sm" onClick={addMat}>+ 자재</button></div></section>}
       {!data.ledger.length ? <Empty>등록된 자재가 없습니다.</Empty> : (
-        <div className="grid" style={{ gridTemplateColumns: 'minmax(240px, 320px) minmax(0, 1fr)', alignItems: 'start' }}>
+        <div className="rgrid" style={{ ...cols('minmax(240px, 320px) minmax(0, 1fr)'), alignItems: 'start' }}>
           <nav className="card" aria-label="자재 목록" style={{ padding: 10, gap: 4 }}>
             {data.ledger.map((m) => <button key={m.material_id} aria-pressed={cur?.material_id === m.material_id} onClick={() => setSel(m.material_id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, textAlign: 'left', cursor: 'pointer', border: cur?.material_id === m.material_id ? '1.5px solid var(--blue)' : '1px solid transparent', background: cur?.material_id === m.material_id ? 'var(--blue-ll)' : '#fff' }}>
               <span style={{ flex: 1 }}><b>{m.name}</b><div className="muted">{m.spec} · 반입 {qty(m.in_qty)} · 사용 {qty(m.use_qty)}</div></span>

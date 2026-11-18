@@ -4,7 +4,7 @@ import { loadStructure } from '../../lib/data';
 import { signedUrls } from '../../lib/files';
 import { useAuth } from '../../lib/auth';
 import { today, dateK, dt, qty, won, REPORT, REQ, PHOTO_KINDS } from '../../lib/format';
-import { useLoad, Loading, Pill, Empty, useSigned, useToast } from '../../lib/ui';
+import { useLoad, Loading, Pill, Empty, useSigned, useToast, cols } from '../../lib/ui';
 
 export default function Site({ pid }: { pid: string }) {
   const [sub, setSub] = useState<'daily' | 'photos' | 'drawings' | 'requests'>('daily');
@@ -75,11 +75,11 @@ function Daily({ pid }: { pid: string }) {
               {!r.progress_entries.length && <span className="sub">수량 입력 없음</span>}
             </section>
             <section className="card"><h3>투입인원 · {r.daily_crews.reduce((s: number, c: any) => s + c.headcount, 0)}명</h3>
-              <table className="tbl"><thead><tr><th>직종</th><th>소속</th><th className="r">인원</th></tr></thead>
-                <tbody>{r.daily_crews.map((c: any) => <tr key={c.id}><td>{c.trade}</td><td className="sub">{c.company}</td><td className="r"><b>{c.headcount}</b></td></tr>)}</tbody></table></section>
+              <div className="tbl-wrap"><table className="tbl"><thead><tr><th>직종</th><th>소속</th><th className="r">인원</th></tr></thead>
+                <tbody>{r.daily_crews.map((c: any) => <tr key={c.id}><td>{c.trade}</td><td className="sub">{c.company}</td><td className="r"><b>{c.headcount}</b></td></tr>)}</tbody></table></div></section>
             <section className="card"><h3>투입장비 · {r.daily_equipment.length}대</h3>
-              <table className="tbl"><thead><tr><th>장비 · 규격</th><th>구분</th><th>시간</th><th>업체</th><th className="r">금액</th></tr></thead>
-                <tbody>{r.daily_equipment.map((e: any) => <tr key={e.id}><td>{e.name} {e.spec}</td><td>{e.kind}</td><td>{e.hours}</td><td>{e.vendor}</td><td className="r">{won(e.amount)}</td></tr>)}</tbody></table></section>
+              <div className="tbl-wrap"><table className="tbl"><thead><tr><th>장비 · 규격</th><th>구분</th><th>시간</th><th>업체</th><th className="r">금액</th></tr></thead>
+                <tbody>{r.daily_equipment.map((e: any) => <tr key={e.id}><td>{e.name} {e.spec}</td><td>{e.kind}</td><td>{e.hours}</td><td>{e.vendor}</td><td className="r">{won(e.amount)}</td></tr>)}</tbody></table></div></section>
             <section className="card"><h3>자재 · 사진 {r.photos.length}장</h3>
               {r.material_moves.map((m: any) => <div key={m.id} className="row between" style={{ padding: '8px 10px', background: 'var(--bg)', borderRadius: 8 }}><span>{m.materials?.name}</span><span>{m.kind === 'in' ? '반입' : '사용'} <b>{qty(m.qty)}</b> {m.materials?.unit}{m.invoice_path ? ' · 송장 ✓' : ''}</span></div>)}
               <div className="photo-grid">{r.photos.map((p: any) => <a key={p.id} className="photo" href={urls[p.storage_path]} target="_blank" rel="noreferrer">{urls[p.storage_path] && <img src={urls[p.storage_path]} alt={p.memo || p.kind} />}<span className="tag pill">{p.kind}</span></a>)}</div>
@@ -102,7 +102,7 @@ function Photos({ pid }: { pid: string }) {
   const nm = st ? names(st) : null;
   const groups = useMemo(() => { const m = new Map<string, any[]>(); (data || []).forEach((p) => { const k = p.taken_at.slice(0, 10); m.set(k, [...(m.get(k) || []), p]); }); return [...m.entries()]; }, [data]);
   return (
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 320px)', alignItems: 'start' }}>
+    <div className="rgrid" style={{ ...cols('minmax(0, 1fr) minmax(260px, 320px)'), alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="row">
           <select aria-label="위치" className="input" style={{ width: 200 }} value={loc} onChange={(e) => setLoc(e.target.value)}><option value="">모든 위치</option>{st?.facilities.flatMap((f) => f.locations.map((l) => <option key={l.id} value={l.id}>{f.name} › {l.name}</option>))}</select>
@@ -166,7 +166,7 @@ function Requests({ pid }: { pid: string }) {
     } catch (e: any) { toast(e.message); }
   };
   return (
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 400px)', alignItems: 'start' }}>
+    <div className="rgrid" style={{ ...cols('minmax(0, 1fr) minmax(300px, 400px)'), alignItems: 'start' }}>
       <section className="card flat"><div className="tbl-wrap"><table className="tbl" style={{ minWidth: 640 }}>
         <thead><tr><th>요청</th><th>보낸 사람 → 받는 사람</th><th>마감</th><th>응답</th><th>상태</th></tr></thead>
         <tbody>{data?.reqs.map((r) => <tr key={r.id}><td><b>{r.title}</b><div className="muted">{r.kind}{r.body ? ' · ' + r.body : ''}</div></td>

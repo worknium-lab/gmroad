@@ -3,7 +3,7 @@ import { sb, q } from '../../lib/supabase';
 import { upload, download } from '../../lib/files';
 import { useAuth } from '../../lib/auth';
 import { won, dt, DOC } from '../../lib/format';
-import { useLoad, Loading, FileDrop, useToast, Pill, Modal, Empty } from '../../lib/ui';
+import { useLoad, Loading, FileDrop, useToast, Pill, Modal, Empty, cols } from '../../lib/ui';
 
 const DESIGN = ['design_spec', 'design_boq', 'qty_calc', 'drawing'] as const;
 const CON_SUB = ['착공 서류', '기성 서류', '준공 서류', '안전 · 품질', '발주처 공문', '기타'];
@@ -51,7 +51,7 @@ export default function Docs({ pid, mode }: { pid: string; mode: 'design' | 'con
   if (mode === 'construction') {
     const list = docs.filter((d) => d.category === 'construction');
     return (
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(200px, 260px) 1fr' }}>
+      <div className="rgrid" style={cols('minmax(200px, 260px) minmax(0, 1fr)')}>
         <nav className="card" aria-label="서류함" style={{ padding: 10, gap: 2 }}>
           {CON_SUB.map((s) => <button key={s} className="btn" style={{ justifyContent: 'space-between', border: 0, background: conSub === s ? 'var(--blue-l)' : 'transparent', fontWeight: conSub === s ? 700 : 500 }} onClick={() => setConSub(s)}>
             <span>{s}</span><span className="muted">{list.filter((d) => d.subcategory === s).length}</span></button>)}

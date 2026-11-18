@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { api, q, sb } from '../../lib/supabase';
 import { download, upload } from '../../lib/files';
 import { mul, qty as fq, won } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg, cols } from '../../lib/ui';
 
 export type Price = { v?: number; f?: string; quote?: string };
 export type Line = { name: string; spec?: string; unit?: string; qty: any; mat?: Price; lab?: Price; exp?: Price; src?: string };
@@ -198,7 +198,7 @@ function UCEditor({ rev, uc, next, draft, rate, qs, onClose, onSaved }: { rev: a
     <Modal title={uc?.id ? `신규 ${f.seq} 일위대가` : `새 일위대가 · 신규 ${f.seq}`} onClose={onClose} wide
       foot={draft ? <><button className="btn" onClick={onClose}>취소</button><button className="btn pri" disabled={!ok} onClick={save}>저장</button></> : <button className="btn" onClick={onClose}>닫기</button>}>
       {f.copied_from && <div className="muted">복사한 호표: {f.copied_from}</div>}
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1.4fr 0.8fr 2fr', gap: 10 }}>
+      <div className="rgrid" style={{ ...cols('2fr 1.4fr 0.8fr 2fr', 'repeat(2, minmax(0, 1fr))'), gap: 10 }}>
         <div className="field"><label htmlFor="u1">공종명</label><input id="u1" className="input" value={f.name} disabled={!draft} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label htmlFor="u2">규격</label><input id="u2" className="input" value={f.spec || ''} disabled={!draft} onChange={(e) => setF({ ...f, spec: e.target.value })} /></div>
         <div className="field"><label htmlFor="u3">단위</label><input id="u3" className="input" value={f.unit || ''} disabled={!draft} onChange={(e) => setF({ ...f, unit: e.target.value })} /></div>
@@ -269,7 +269,7 @@ function QuoteEditor({ rev, qt, next, draft, onClose, onSaved }: { rev: any; qt:
   return (
     <Modal title={qt ? `단가산출서 · ${qt.name}` : '새 단가산출서'} onClose={onClose}
       foot={draft ? <><button className="btn" onClick={onClose}>취소</button><button className="btn pri" disabled={!f.name.trim()} onClick={save}>저장</button></> : <button className="btn" onClick={onClose}>닫기</button>}>
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1.4fr 0.8fr', gap: 10 }}>
+      <div className="rgrid" style={{ ...cols('2fr 1.4fr 0.8fr', 'repeat(2, minmax(0, 1fr))'), gap: 10 }}>
         <div className="field"><label htmlFor="q1">품명</label><input id="q1" className="input" value={f.name} disabled={!draft} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label htmlFor="q2">규격</label><input id="q2" className="input" value={f.spec || ''} disabled={!draft} onChange={(e) => setF({ ...f, spec: e.target.value })} /></div>
         <div className="field"><label htmlFor="q3">단위</label><input id="q3" className="input" value={f.unit || ''} disabled={!draft} onChange={(e) => setF({ ...f, unit: e.target.value })} /></div>

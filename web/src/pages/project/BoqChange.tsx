@@ -4,7 +4,7 @@ import { api, q, sb } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { download } from '../../lib/files';
 import { dt, mul, qty as fq, won } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg, cols } from '../../lib/ui';
 import { UnitPanel, LinkModal, loadUnits, calcUC, UC, Quote } from './BoqUnitCost';
 
 type Rev = any; type Item = any;
@@ -266,7 +266,7 @@ function NewItemModal({ parent, init, rate, ucs, ucCalc, onClose, onSave }: { pa
       foot={<><button className="btn" onClick={onClose}>취소</button>
         <button className="btn pri" disabled={!ok} onClick={() => onSave({ ...f, name: f.name.trim(), mat_price: final('mat_price'), lab_price: final('lab_price'), exp_price: final('exp_price'), unit_cost_id: uc ? ucId : undefined })}>넣기</button></>}>
       <p className="sub">변경 줄에만 들어가고 당초 줄은 비워 둡니다. 저장하면 '{parent?.name}' 소계와 그 위 합계에 더해집니다.</p>
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1.4fr 1fr', gap: 10 }}>
+      <div className="rgrid" style={{ ...cols('2fr 1.4fr 1fr', 'repeat(2, minmax(0, 1fr))'), gap: 10 }}>
         <div className="field"><label htmlFor="ni1">공종명</label><input id="ni1" className="input" value={f.name} onChange={(e) => set('name', e.target.value)} autoFocus /></div>
         <div className="field"><label htmlFor="ni2">규격</label><input id="ni2" className="input" value={f.spec} onChange={(e) => set('spec', e.target.value)} /></div>
         <div className="field"><label htmlFor="ni3">단위</label><input id="ni3" className="input" value={f.unit} onChange={(e) => set('unit', e.target.value)} /></div>
@@ -276,7 +276,7 @@ function NewItemModal({ parent, init, rate, ucs, ucCalc, onClose, onSave }: { pa
         ? <div className="field"><label htmlFor="niu">일위대가</label><select id="niu" className="input" value={ucId} onChange={(e) => { setUcId(e.target.value); const u = ucs.find((x) => x.id === e.target.value); if (u && !f.name) setF({ ...f, name: u.name, spec: u.spec || '', unit: u.unit || '' }); }}>
             {ucs.map((u) => <option key={u.id} value={u.id}>신규 {u.seq} · {u.name} {u.spec || ''} · {won(ucCalc.get(u.id)?.total)}원</option>)}</select></div>
         : <div className="banner"><span>아직 일위대가가 없습니다. 이 창을 닫고 '신규 단가' 탭에서 먼저 만들거나, 단가를 직접 넣으세요.</span></div>)}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div className="rgrid" style={{ ...cols('repeat(4, minmax(0, 1fr))', 'repeat(2, minmax(0, 1fr))'), gap: 10 }}>
         <div className="field"><label htmlFor="ni4">수량</label><input id="ni4" className="input num" inputMode="decimal" value={f.qty} onChange={(e) => set('qty', e.target.value.replace(/[^\d.]/g, ''))} /></div>
         {([['mat_price', '재료비 단가'], ['lab_price', '노무비 단가'], ['exp_price', '경비 단가']] as const).map(([k, l]) => (
           <div key={k} className="field"><label htmlFor={'ni' + k}>{l}</label>{uc ? <span className="num" style={{ minHeight: 44, display: 'flex', alignItems: 'center' }}>{won(final(k))}</span> : <input id={'ni' + k} className="input num" inputMode="numeric" value={f[k]} onChange={(e) => set(k, e.target.value.replace(/\D/g, ''))} />}</div>))}

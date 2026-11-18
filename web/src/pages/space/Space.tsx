@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { q, sb } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { dt } from '../../lib/format';
-import { useLoad, Loading, ErrorBox, Pill, useToast } from '../../lib/ui';
+import { useLoad, Loading, ErrorBox, Pill, useToast, cols } from '../../lib/ui';
 import { KIND, CATS, myPosts, myReads, spaceDownload, kb } from '../../lib/space';
 
 export function SpaceHome() {
@@ -37,7 +37,7 @@ export function SpaceHome() {
         {must.map((p) => <Link key={p.id} to={`/space/board/${p.id}`} className="row between" style={{ textDecoration: 'none', color: 'inherit', borderTop: '1px solid var(--line-2)', paddingTop: 8, minHeight: 40 }}>
           <span><Pill c="red">필독</Pill> <b>{p.title}</b></span><span className="muted">{dt(p.publish_at)} · 확인하기 ›</span></Link>)}
       </section>}
-      <div className="g2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
+      <div className="rgrid" style={{ ...cols('minmax(0, 1.4fr) minmax(0, 1fr)'), alignItems: 'start' }}>
         <section className="card">
           <div className="card-h"><h2>최근 글</h2><Link to="/space/board">게시판 ›</Link></div>
           {recent.map((p) => <Link key={p.id} to={`/space/board/${p.id}`} className="row between" style={{ textDecoration: 'none', color: 'inherit', borderTop: '1px solid var(--line-2)', paddingTop: 8, minHeight: 40 }}>

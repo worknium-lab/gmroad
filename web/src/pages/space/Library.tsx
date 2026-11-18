@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { q, sb } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { dt } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, FileDrop, Seg } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, FileDrop, Seg, cols } from '../../lib/ui';
 import { FOLDERS, SUBFOLDERS, spaceDownload, spaceUpload, kb, extOf } from '../../lib/space';
 
 const TY: Record<string, [string, string]> = { PDF: ['#FDECEA', '#A1271A'], MP4: ['#EDE5F7', '#5E3591'], MOV: ['#EDE5F7', '#5E3591'], PPTX: ['#FFF1E0', '#8A4B00'], PPT: ['#FFF1E0', '#8A4B00'], HWPX: ['#E3ECF7', '#1F4E8C'], HWP: ['#E3ECF7', '#1F4E8C'], XLSX: ['#E3F2EC', '#0F6E4A'], XLS: ['#E3F2EC', '#0F6E4A'], DOCX: ['#E3ECF7', '#1F4E8C'], JPG: ['#EEF1F6', '#33415A'], PNG: ['#EEF1F6', '#33415A'], ZIP: ['#EEF1F6', '#33415A'] };
@@ -34,7 +34,7 @@ export default function Library() {
   return (
     <>
       <div className="row between"><h1>자료실</h1>{canEdit && <button className="btn pri" onClick={() => setUp(true)}>자료 올리기</button>}</div>
-      <div className="story" style={{ gridTemplateColumns: '200px minmax(0, 1fr)' }}>
+      <div className="rgrid" style={{ ...cols('200px minmax(0, 1fr)'), alignItems: 'start' }}>
         <aside className="card" style={{ padding: 10, gap: 4 }}>
           {['전체', ...FOLDERS].map((fd) => (
             <div key={fd}>

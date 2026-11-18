@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { api, q, sb } from '../../lib/supabase';
 import { download, upload } from '../../lib/files';
 import { dt } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg, FileDrop } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Seg, FileDrop, cols } from '../../lib/ui';
 import C from '../../lib/laborCore';
 import { logAction } from '../../lib/data';
 
@@ -98,7 +98,7 @@ function NewMonth({ pid, existing, onClose, onDone }: { pid: string; existing: a
           {recs.filter((r) => r.taps > 1).length > 0 && <Pill c="orange">중복 태그 {recs.filter((r) => r.taps > 1).length}건 합침</Pill>}
         </div>
         <b>열 연결 <span className="muted">자동으로 찾았습니다. 다르면 바꾸세요</span></b>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
+        <div className="rgrid" style={{ ...cols('repeat(6, minmax(0, 1fr))', 'repeat(2, minmax(0, 1fr))'), gap: 8 }}>
           {FIELDS.map(([k, l]) => <label key={k} className="field"><span>{l}</span>
             <select className="input" value={res.map[k] ?? ''} onChange={(e) => remap(k, e.target.value)}><option value="">— 없음 —</option>{res.heads.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}</select></label>)}
         </div>

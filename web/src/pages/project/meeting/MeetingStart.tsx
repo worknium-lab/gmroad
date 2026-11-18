@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../lib/auth';
-import { Modal, FileDrop, Seg, useToast } from '../../../lib/ui';
+import { Modal, FileDrop, Seg, useToast, cols } from '../../../lib/ui';
 import { MEETING_KINDS, Meeting, Attendee, createMeeting, attachAudio, attachPages, patchMeeting, startProcess, useRecorder, mmss } from '../../../lib/meeting';
 
 export type Way = 'rec' | 'file' | 'hand' | 'note' | 'memo';
@@ -74,7 +74,7 @@ export default function MeetingStart({ pid, members, way: way0, onClose, onDone 
 
   return (
     <Modal title="회의 기록 시작" onClose={close} wide>
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1.2fr 1fr 1.2fr', gap: 10 }}>
+      <div className="rgrid" style={{ ...cols('2fr 1.2fr 1fr 1.2fr', 'repeat(2, minmax(0, 1fr))'), gap: 10 }}>
         <div className="field"><label htmlFor="mt1">회의명</label><input id="mt1" className="input" placeholder="예: 주간 공정회의" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} disabled={!!m} /></div>
         <div className="field"><label htmlFor="mt2">일시</label><input id="mt2" className="input" type="datetime-local" value={f.held_at} onChange={(e) => setF({ ...f, held_at: e.target.value })} disabled={!!m} /></div>
         <div className="field"><label htmlFor="mt3">구분</label><select id="mt3" className="input" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} disabled={!!m}>{MEETING_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
