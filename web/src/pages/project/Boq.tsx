@@ -1,10 +1,12 @@
-// ④ 내역서 — 안쪽 탭: 한눈에(흐름 · 남은 일 · 가져오기 · 이력) / 내역서(공종별 내역) / 원가계산서 / 일위대가 · 단가(BoqBasis)
+// ④ 내역서 — 안쪽 탭: 한눈에(흐름 · 남은 일 · 가져오기 · 이력) / 내역서(공종별 내역) / 원가계산서 / 일위대가 · 단가(BoqBasis) / 차수(BoqPhase) / 기성(BoqRounds)
 //   엑셀 원본이 기준이고, 적산 엔진(lib/estimate)은 같은 규칙으로 다시 계산해 검산합니다.
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, q, sb } from '../../lib/supabase';
 import { verify, summaryAmt, shortRef } from '../../lib/boqSheet';
 import BoqBasis from './BoqBasis';
+import BoqPhase from './BoqPhase';
+import BoqRounds from './BoqRounds';
 import { download } from '../../lib/files';
 import { dt, qty, won } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Empty, Pill, Modal } from '../../lib/ui';
@@ -19,8 +21,8 @@ const nospace = (s: string) => (s || '').replace(/\s+/g, '');
 const pctS = (v: number, d = 3) => (v * 100).toFixed(d) + '%';
 
 type Rev = any; type Item = any;
-type View = 'flow' | 'boq' | 'cost' | 'basis';
-const VIEWS: [View, string][] = [['flow', '한눈에'], ['boq', '내역서'], ['cost', '원가계산서'], ['basis', '일위대가 · 단가']];
+type View = 'flow' | 'boq' | 'cost' | 'basis' | 'phase' | 'prog';
+const VIEWS: [View, string][] = [['flow', '한눈에'], ['boq', '내역서'], ['cost', '원가계산서'], ['basis', '일위대가 · 단가'], ['phase', '차수'], ['prog', '기성']];
 
 export default function Boq({ pid, p }: { pid: string; p: any }) {
   const toast = useToast();
@@ -35,7 +37,7 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
   const [mkChange, setMkChange] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [stamp, setStamp] = useState(0);
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, canEdit, profile } = useAuth();
 
   if (revs.loading || docs.loading) return <Loading />;
   if (revs.error) return <ErrorBox msg={revs.error.includes('boq_revisions') ? '내역서 표가 아직 없습니다. 서버에서 bash scripts/update.sh 를 실행해 주세요.' : revs.error} />;
@@ -52,6 +54,8 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
   const lastFinal = [...finals].sort((a, b) => b.seq - a.seq)[0];
   const changeBases = lastFinal ? [lastFinal] : contracts;
   const rate = [...contracts].reverse().find((c) => c.params?.rate)?.params?.rate;
+  // 차수 · 기성 기준: 마지막 준공내역서(설계변경 확정분), 없으면 마지막 도급내역서
+  const workBase = lastFinal || contracts[contracts.length - 1];
   const refresh = async (id?: string) => { await revs.reload(); if (id) setSel(id); setStamp((x) => x + 1); };
 
   const doImport = async (d: any) => {
@@ -116,6 +120,9 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
       {view === 'boq' && cur && cur.kind === 'change' && <ChangeView key={cur.id} rev={cur} rate={rate} onChanged={refresh} onDelete={() => doDelete(cur)} />}
       {view === 'boq' && cur && cur.kind !== 'change' && <RevView key={cur.id + (sp.get('q') || '')} rev={cur} initFind={sp.get('q') || ''} base={list.find((r) => r.id === cur.base_id && r.kind !== 'change')} onDelete={() => doDelete(cur)} onChanged={refresh} />}
       {view === 'cost' && cur && <CostView key={cur.id} rev={cur} base={list.find((r) => r.id === cur.base_id)} />}
+      {(view === 'phase' || view === 'prog') && list.length > 0 && !workBase && <Empty>차수 · 기성은 도급내역서를 기준으로 합니다. <button className="link" onClick={() => go('flow')}>한눈에</button> 탭에서 도급내역서를 먼저 만드세요.</Empty>}
+      {view === 'phase' && workBase && <BoqPhase key={workBase.id} base={workBase} canEdit={canEdit} />}
+      {view === 'prog' && workBase && <BoqRounds key={workBase.id} pid={pid} base={workBase} canEdit={canEdit} isAdmin={isAdmin} />}
       {view === 'basis' && cur && <BoqBasis key={cur.id} rev={cur} rate={rate} onFind={(name) => go('boq', undefined, name)} />}
       {view === 'boq' && cur && <BoqLogs pid={pid} revId={cur.id} stamp={stamp + (revs.data?.length || 0)} />}
       {mkChange && <ChangeCreate p={p} bases={changeBases} onClose={() => setMkChange(false)} onDone={(id) => { setMkChange(false); refresh(id); toast('변경내역서를 만들었습니다'); }} />}

@@ -158,8 +158,12 @@ export const boqRoutes = {
     if (rev.kind !== 'design' && (rev.status === 'confirmed' || rev.locked)) throw [400, '확정된 내역서는 지울 수 없습니다. 먼저 잠금을 풀어 주세요'];
     const { count } = await admin.from('boq_revisions').select('id', { count: 'exact', head: true }).eq('base_id', rev.id);
     if (count) throw [400, '이 내역서로 만든 다음 차수가 있어 지울 수 없습니다'];
+    const { count: rounds } = await admin.from('boq_rounds').select('id', { count: 'exact', head: true }).eq('revision_id', rev.id);
+    if (rounds) throw [400, `이 내역서를 기준으로 한 기성 회차가 ${rounds}개 있어 지울 수 없습니다 (④ 내역서 › 기성)`];
+    // DB 줄을 먼저 지우고, 성공했을 때만 엑셀 파일을 지움 (실패하면 파일이 남아 있어야 함)
+    const { error: delErr } = await admin.from('boq_revisions').delete().eq('id', rev.id);
+    if (delErr) throw [400, '지우지 못했습니다: ' + delErr.message];
     await admin.storage.from(BUCKET).remove([rev.storage_path]);
-    await admin.from('boq_revisions').delete().eq('id', rev.id);
     await log({ ...rev, id: null }, me, '삭제');
     return { ok: true };
   },
