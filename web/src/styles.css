@@ -374,3 +374,27 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 /* 워크니움 공지 팝업 */
 .vn-body { white-space: pre-line; line-height: 1.7; font-size: 15px; max-height: 60vh; overflow-y: auto; }
 .vn-head { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- ④ 내역서 안 탭 ---------- */
+.subtabs.boq button.on { color: var(--blue); border-bottom-color: var(--blue); }
+.boq-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.boq-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.boq-col-h { font-weight: 700; }
+.boq-box { display: flex; flex-direction: column; gap: 4px; text-align: left; border: 1px solid var(--line-3); border-radius: 10px; background: #fff; padding: 10px 12px; min-height: 44px; cursor: pointer; font: inherit; color: inherit; min-width: 0; }
+.boq-box:hover { border-color: var(--muted); }
+.boq-box b { font-size: 13.5px; overflow-wrap: anywhere; }
+.boq-box .amt { font-weight: 700; }
+.boq-box.work { border-color: var(--orange-b); background: #FFFCF6; }
+.boq-box.cur { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.boq-box.wait { border-style: dashed; background: var(--bg); cursor: default; }
+.boq-bb { display: flex; height: 44px; border-radius: 8px; overflow: hidden; }
+.boq-bb span { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; border-right: 1px solid #fff; }
+.boq-bb span:last-child { border-right: 0; }
+.boq-lg { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 12px; font-size: 12.5px; color: var(--sub); }
+.boq-lg span { display: flex; align-items: center; gap: 6px; }
+.boq-lg i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.boq-lg b { margin-left: auto; color: var(--text); font-weight: 500; }
+.boq-kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 13.5px; }
+.boq-kv span { color: var(--sub); }
+.boq-cost { grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr); align-items: start; }
+@media (max-width: 900px) { .boq-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .boq-cost { grid-template-columns: 1fr; } }
