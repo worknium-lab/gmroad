@@ -538,9 +538,9 @@
         if (pi === 3 && k % 6 === 0) outM = 12 * 60 + 5; // 반일 근무
         const date = y + '-' + pad(m) + '-' + pad(d);
         const t = (x) => pad(Math.floor(x / 60)) + ':' + pad(x % 60);
-        if (pi === 4 && k === 2) { out.push([seq++, '공릉천교', p[0], p[1], p[2], date, t(inM), '']); return; } // 퇴근 미태그
-        out.push([seq++, '공릉천교', p[0], p[1], p[2], date, t(inM), t(outM)]);
-        if (pi === 1 && k === 4) out.push([seq++, '공릉천교', p[0], p[1], p[2], date, t(inM + 3), '']); // 중복 태그
+        if (pi === 4 && k === 2) { out.push([seq++, '한빛교', p[0], p[1], p[2], date, t(inM), '']); return; } // 퇴근 미태그
+        out.push([seq++, '한빛교', p[0], p[1], p[2], date, t(inM), t(outM)]);
+        if (pi === 1 && k === 4) out.push([seq++, '한빛교', p[0], p[1], p[2], date, t(inM + 3), '']); // 중복 태그
       });
     });
     return out;
