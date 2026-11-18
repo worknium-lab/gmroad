@@ -75,6 +75,60 @@ async function saveRevision(row, items) {
   }
   return rev;
 }
+/* ---------- 설계변경 확정 → 차수 · 기성 · 공종 연결을 새 준공내역서로 ----------
+   행 번호는 공종명 · 규격 · 단위가 같은 항목끼리 짝지음 (같은 열쇠가 둘 이상이면 옮기지 않음) */
+const leafKey = (i) => [i.name, i.spec, i.unit].map((x) => String(x ?? '').replace(/\s+/g, '')).join('|');
+const isLeaf = (i) => i.section === 'detail' && (i.kind === 'item' || i.kind === 'link');
+async function itemsOf(revId) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin.from('boq_items').select('row, name, spec, unit, kind, section').eq('revision_id', revId).order('row').range(from, from + 999);
+    if (error) throw [400, error.message];
+    out.push(...data); if (data.length < 1000) break;
+  }
+  return out;
+}
+function rowMapOf(fromItems, toItems) {
+  const dest = new Map();
+  for (const i of toItems.filter(isLeaf)) { const k = leafKey(i); dest.set(k, dest.has(k) ? null : String(i.row)); }
+  const out = new Map();
+  for (const i of fromItems.filter(isLeaf)) { const d = dest.get(leafKey(i)); if (d) out.set(String(i.row), d); }
+  return out;
+}
+const remapQty = (m, map) => { const o = {}; for (const [k, v] of Object.entries(m || {})) { const d = map.get(k); if (d) o[d] = (o[d] || 0) + Number(v); } return o; };
+async function carryOver(projectId, finId, finItems) {
+  const res = { rounds: 0, phases: 0, links: 0 };
+  // 직전 기준: 이번 것 말고 마지막 준공내역서, 없으면 마지막 도급내역서
+  const { data: prevF } = await admin.from('boq_revisions').select('id').eq('project_id', projectId).eq('kind', 'final').neq('id', finId).order('seq', { ascending: false }).limit(1);
+  const { data: prevC } = await admin.from('boq_revisions').select('id').eq('project_id', projectId).eq('kind', 'contract').order('created_at', { ascending: false }).limit(1);
+  const prevId = prevF?.[0]?.id || prevC?.[0]?.id;
+  const maps = new Map();
+  const mapFor = async (revId) => { if (!maps.has(revId)) maps.set(revId, rowMapOf(await itemsOf(revId), finItems)); return maps.get(revId); };
+  // 작성 중 기성 회차 (확정된 회차는 그대로 기록으로 둠)
+  const { data: rounds } = await admin.from('boq_rounds').select('id, revision_id, qty').eq('project_id', projectId).eq('status', 'draft').neq('revision_id', finId);
+  for (const r of rounds || []) {
+    const { error } = await admin.from('boq_rounds').update({ revision_id: finId, qty: remapQty(r.qty, await mapFor(r.revision_id)) }).eq('id', r.id);
+    if (!error) res.rounds++;
+  }
+  if (!prevId) return res;
+  // 차수: 직전 기준의 배분을 새 기준으로 복사 (신규 항목은 미배정으로 남음)
+  const { data: phases } = await admin.from('boq_phases').select('seq, name, alloc').eq('revision_id', prevId).order('seq');
+  if (phases?.length) {
+    const map = await mapFor(prevId);
+    const { error } = await admin.from('boq_phases').insert(phases.map((p) => ({ project_id: projectId, revision_id: finId, seq: p.seq, name: p.name, alloc: remapQty(p.alloc, map) })));
+    if (!error) res.phases = phases.length;
+  }
+  // ⑦ 공정률 공종 ↔ 내역 항목 연결
+  const { data: links } = await admin.from('boq_work_links').select('work_item_id, boq_row').eq('revision_id', prevId);
+  for (const l of links || []) {
+    const d = (await mapFor(prevId)).get(String(l.boq_row));
+    const q = d ? admin.from('boq_work_links').update({ revision_id: finId, boq_row: Number(d) }) : admin.from('boq_work_links').delete();
+    const { error } = await q.eq('work_item_id', l.work_item_id);
+    if (!error) res.links++;
+  }
+  return res;
+}
+
 async function unitData(rev) {
   const { data: ucs } = await admin.from('boq_unit_costs').select('*').eq('revision_id', rev.id);
   const { data: qs } = await admin.from('boq_quotes').select('*').eq('revision_id', rev.id);
@@ -160,6 +214,8 @@ export const boqRoutes = {
     if (count) throw [400, '이 내역서로 만든 다음 차수가 있어 지울 수 없습니다'];
     const { count: rounds } = await admin.from('boq_rounds').select('id', { count: 'exact', head: true }).eq('revision_id', rev.id);
     if (rounds) throw [400, `이 내역서를 기준으로 한 기성 회차가 ${rounds}개 있어 지울 수 없습니다 (④ 내역서 › 기성)`];
+    const { count: subs } = await admin.from('boq_subs').select('id', { count: 'exact', head: true }).eq('revision_id', rev.id);
+    if (subs) throw [400, `이 내역서를 기준으로 한 하도급내역서가 ${subs}개 있어 지울 수 없습니다 (④ 내역서 › 하도급)`];
     // DB 줄을 먼저 지우고, 성공했을 때만 엑셀 파일을 지움 (실패하면 파일이 남아 있어야 함)
     const { error: delErr } = await admin.from('boq_revisions').delete().eq('id', rev.id);
     if (delErr) throw [400, '지우지 못했습니다: ' + delErr.message];
@@ -250,9 +306,10 @@ export const boqRoutes = {
       totals: totalsOf(parsed.totals), params: { from: rev.title }, status: 'confirmed', locked: true, created_by: me.id, confirmed_by: me.id, confirmed_at: now,
     }, parsed.items);
     await admin.from('boq_revisions').update({ status: 'confirmed', locked: true, confirmed_by: me.id, confirmed_at: now }).eq('id', rev.id);
-    await log(rev, me, '확정', null, { final: fin.title, contract: rev.totals?.contract, orig: rev.params.orig_totals?.contract });
+    const carried = await carryOver(rev.project_id, fin.id, parsed.items);
+    await log(rev, me, '확정', null, { final: fin.title, contract: rev.totals?.contract, orig: rev.params.orig_totals?.contract, ...carried });
     await log(fin, me, '준공내역서 생성', null, { from: rev.title });
-    return { ok: true, final_id: fin.id };
+    return { ok: true, final_id: fin.id, carried };
   },
 
   // 잠금 해제: 회사 비밀번호 + 사유 → 이력

@@ -413,3 +413,10 @@ table.lst tr.sum td { background: #F2F2F2; font-weight: 700; }
 .qin { width: 96px; height: 34px; border: 1px solid var(--orange-b); background: var(--orange-l); border-radius: 6px; padding: 0 8px; text-align: right; font-variant-numeric: tabular-nums; }
 .qin:focus { outline: 2px solid var(--blue-l); border-color: var(--blue); background: #fff; }
 .qin.over { border-color: var(--red); background: var(--red-l); color: var(--red); font-weight: 700; }
+.tbl tr.boq-sub-on td { background: var(--blue-ll); }
+.tbl tr.boq-sub-on td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.boq-chk { display: flex; flex-direction: column; }
+.boq-chk label { display: flex; align-items: center; gap: 10px; min-height: 40px; border-top: 1px solid var(--line-2); font-size: 13.5px; cursor: pointer; }
+.boq-chk label:first-child { border-top: 0; }
+.boq-chk input { width: 18px; height: 18px; flex: none; }
+.boq-chk em { font-style: normal; margin-left: auto; color: var(--sub-2); font-size: 12.5px; font-variant-numeric: tabular-nums; }

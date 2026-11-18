@@ -241,7 +241,7 @@ export function ChangeView({ rev, rate, onChanged, onDelete }: { rev: Rev; rate?
       {addTo && <NewItemModal parent={addTo.parent} init={addTo.edit} rate={rate} ucs={ucs} ucCalc={ucCalc} onClose={() => setAddTo(null)} onSave={(n) => {
         setNews(addTo.edit ? news.map((x) => (x === addTo.edit ? n : x)) : [...news, n]); setDirty(true); setAddTo(null);
       }} />}
-      {confirmOpen && <ConfirmModal rev={rev} checks={checks} counts={counts} onClose={() => setConfirmOpen(false)} onDone={(fid) => { setConfirmOpen(false); toast('확정했습니다 · 준공내역서를 만들었습니다'); onChanged(fid); }} />}
+      {confirmOpen && <ConfirmModal rev={rev} checks={checks} counts={counts} onClose={() => setConfirmOpen(false)} onDone={(fid, c) => { setConfirmOpen(false); toast('확정했습니다 · 준공내역서를 만들었습니다' + (c && (c.rounds || c.phases || c.links) ? ` · 옮긴 것: 기성 ${c.rounds}회차 · 차수 ${c.phases}개 · 공종 연결 ${c.links}개` : '')); onChanged(fid); }} />}
       {unlock && <UnlockModal rev={rev} onClose={() => setUnlock(false)} onDone={() => { setUnlock(false); toast('잠금을 풀었습니다 · 이력에 남았습니다'); onChanged(rev.id); }} />}
     </section>
   );
@@ -290,7 +290,7 @@ function NewItemModal({ parent, init, rate, ucs, ucCalc, onClose, onSave }: { pa
 }
 
 /* ---------- 확정 ---------- */
-function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; checks: any[]; counts: any; onClose: () => void; onDone: (finalId?: string) => void }) {
+function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; checks: any[]; counts: any; onClose: () => void; onDone: (finalId?: string, carried?: any) => void }) {
   const [ok, setOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -298,7 +298,7 @@ function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; chec
   const pass = checks.every((c) => c.ok || c.warn);
   const go = async () => {
     setBusy(true); setErr('');
-    try { const r = await api('/api/boq/confirm', { revision_id: rev.id }); onDone(r.final_id); } catch (e: any) { setErr(e.message); }
+    try { const r = await api('/api/boq/confirm', { revision_id: rev.id }); onDone(r.final_id, r.carried); } catch (e: any) { setErr(e.message); }
     setBusy(false);
   };
   return (
@@ -313,6 +313,7 @@ function ConfirmModal({ rev, checks, counts, onClose, onDone }: { rev: Rev; chec
       <h3 style={{ fontSize: 15 }}>확정 전 검사</h3>
       {checks.map((c) => <div key={c.label} className="row" style={{ gap: 8 }}><span aria-hidden>{c.ok ? '✅' : c.warn ? '⚠️' : '❌'}</span><span>{c.label}{c.detail ? ` — ${c.detail}` : ''}</span></div>)}
       <div className="banner blue"><span>확정하면 ① 이 변경내역서를 잠그고 ② 변경 값으로 <b>준공내역서</b>를 새로 만듭니다 (한 줄 내역서, 단가는 값 · 금액은 TRUNC 수식). 고칠 일이 생기면 비밀번호로 잠금을 풀 수 있고, 다시 확정하면 준공내역서가 새 버전으로 만들어집니다.</span></div>
+      <div className="banner"><span>③ 새 준공내역서가 <b>차수 · 기성의 기준</b>이 됩니다. 작성 중인 기성 회차와 차수 배분, 공정률 공종 연결을 공종명 · 규격 · 단위가 같은 항목으로 옮깁니다 (확정된 기성 회차는 기록으로 그대로). 신규 항목은 차수에서 미배정으로 나오고, 하도급은 ④ 내역서 › 하도급에서 변경내역서를 만듭니다.</span></div>
       <label className="row" style={{ gap: 8, minHeight: 44 }}><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} style={{ width: 20, height: 20 }} /> 위 내용을 확인했습니다</label>
       {err && <div className="banner red">{err}</div>}
     </Modal>
