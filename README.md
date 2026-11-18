@@ -123,6 +123,7 @@ tailscale serve status        # https://워크니움서버.xxxx.ts.net 주소 �
 | 상태 보기 | `docker compose ps` · `docker compose logs -f web api` |
 | 백업 | `bash scripts/backup.sh` → `backups/날짜/` (DB · 계정 · 업로드 파일, 최근 14개 보관) |
 | 매일 자동 백업 | `crontab -e` → `30 3 * * * cd ~/gmroad && bash scripts/backup.sh >> backups/backup.log 2>&1` |
+| 샘플 프로젝트 넣기 / 지우기 | `docker exec -i supabase-db psql -U postgres < scripts/sample-data/sample.sql` / `… < scripts/sample-data/remove.sql` (생성: `python3 scripts/sample-data/make_sample.py`) |
 | 멈추기 / 다시 띄우기 | `docker compose down` / `docker compose up -d` |
 
 ---
