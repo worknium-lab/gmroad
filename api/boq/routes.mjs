@@ -351,6 +351,27 @@ export const boqRoutes = {
     return { ok: true };
   },
 
+  // 현장 앱(공릉천교 '내역' 탭)으로 확정 내역서 보내기 — 화면이 엔진으로 만든 보기용 묶음을 public.docs 에 씀
+  'POST /api/boq/publish-app': async (me, b) => {
+    const p = await canBoq(me, b.project_id);
+    if (!['system_admin', 'company_admin', 'staff'].includes(me.role)) throw [403, '본사 계정만 보낼 수 있습니다'];
+    const { data: t } = await admin.from('boq_app_targets').select('*').eq('project_id', p.id).maybeSingle();
+    if (!t) throw [400, '이 공사는 현장 앱과 이어져 있지 않습니다 (시스템 관리자가 ④ 내역서 › 한눈에서 잇습니다)'];
+    const d = b.payload;
+    if (!d || typeof d !== 'object' || d.v !== 1 || !Array.isArray(d.tree)) throw [400, '보낼 내역서가 없습니다'];
+    const size = JSON.stringify(d).length;
+    if (size > 4e6) throw [400, '내역서가 너무 큽니다'];
+    const { data: base } = await admin.from('boq_revisions').select('id, project_id, title, status, locked').eq('id', d.base?.id).maybeSingle();
+    if (!base || base.project_id !== p.id || !(base.locked || base.status === 'confirmed')) throw [400, '확정된 도급 · 준공내역서만 보낼 수 있습니다'];
+    const now = new Date().toISOString();
+    const data = { ...d, project: { ...(d.project || {}), name: p.name, client: p.client }, sent_at: now, sent_by: me.name || me.username || '' };
+    const { error } = await admin.schema('public').from('docs').upsert({ col: 'boq', id: t.doc_id, data, deleted: false }, { onConflict: 'col,id' });
+    if (error) throw [400, '현장 앱에 쓰지 못했습니다: ' + error.message];
+    await admin.from('boq_app_targets').update({ sent_at: now, sent_title: base.title, sent_by: me.id }).eq('project_id', p.id);
+    await log({ ...base, project_id: p.id }, me, '현장 앱으로 보냄', null, { app: t.app, size });
+    return { ok: true, sent_at: now };
+  },
+
   // 차수 · 기성 · 하도급 엑셀 (화면이 계산한 표 → 엑셀, 읽기 전용)
   'POST /api/boq/sheet-xlsx': async (me, b) => {
     await canBoq(me, b.project_id);

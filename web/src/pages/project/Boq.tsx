@@ -8,6 +8,7 @@ import BoqBasis from './BoqBasis';
 import BoqPhase from './BoqPhase';
 import BoqRounds from './BoqRounds';
 import BoqSub from './BoqSub';
+import BoqApp from './BoqApp';
 import { download } from '../../lib/files';
 import { dt, qty, won } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Empty, Pill, Modal } from '../../lib/ui';
@@ -114,6 +115,7 @@ export default function Boq({ pid, p }: { pid: string; p: any }) {
             );
           })}
         </section>
+        <BoqApp pid={pid} revs={list} base={workBase} />
         {list.length > 0 && <BoqLogs pid={pid} revId={undefined} stamp={stamp + (revs.data?.length || 0)} />}
       </>}
 
