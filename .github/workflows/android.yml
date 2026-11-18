@@ -39,6 +39,6 @@ jobs:
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk gm.apk
-          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "GM 통합관리 안드로이드 앱" --notes "폰에서 gm.apk를 눌러 설치하세요. 테일스케일 없이 바로 열립니다 (https://gm.worknium.co.kr)."
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "GM 통합관리 안드로이드 앱 1.0.${{ github.run_number }}" --notes "폰에서 gm.apk를 눌러 설치하세요. 테일스케일 없이 바로 열립니다 (https://gm.worknium.co.kr)."
           gh release upload android-latest gm.apk --clobber
-          gh release edit android-latest --notes "폰에서 gm.apk를 눌러 설치하세요. 테일스케일 없이 바로 열립니다 (https://gm.worknium.co.kr). (빌드 ${{ github.run_number }}, $(date -u +%F))"
+          gh release edit android-latest --title "GM 통합관리 안드로이드 앱 1.0.${{ github.run_number }}" --notes "폰에서 gm.apk를 눌러 설치하세요. 테일스케일 없이 바로 열립니다 (https://gm.worknium.co.kr). (빌드 ${{ github.run_number }}, $(date -u +%F))"
