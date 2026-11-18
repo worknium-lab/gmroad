@@ -34,7 +34,7 @@ async function body(req) {
 function send(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); }
 
 // 라이선스 단계별로 관리 API가 해도 되는 일 (읽기 전용: 보기 · 엑셀 내려받기만, 차단: 라이선스 · 알림만)
-const READONLY_OK = new Set(['POST /api/boq/inspect', 'POST /api/boq/refs', 'POST /api/photos/sheet-xlsx', 'POST /api/products/deliveries-xlsx', 'POST /api/labor/build', 'POST /api/admin/users/reset']);
+const READONLY_OK = new Set(['POST /api/boq/inspect', 'POST /api/boq/refs', 'POST /api/boq/sheet-xlsx', 'POST /api/photos/sheet-xlsx', 'POST /api/products/deliveries-xlsx', 'POST /api/labor/build', 'POST /api/admin/users/reset']);
 const ALWAYS_OK = (k) => k.startsWith('GET ') || k.startsWith('POST /api/license/') || k.startsWith('POST /api/push/');
 async function licenseGate(key) {
   if (ALWAYS_OK(key)) return;

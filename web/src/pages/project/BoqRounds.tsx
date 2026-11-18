@@ -1,6 +1,7 @@
 // ④ 내역서 › 기성 — 매달 기성 청구 서류 만들기 (현장 승인 수량 → 금회 수량 → 청구 금액)
 //   계산: 적산 엔진 progressSheet(전회까지 · 금회 · 누계), 항목 금액은 수량 × 단가 원 미만 버림
-//   기성금 = 도급액 × 금회 직접공사비 ÷ 도급 직접공사비 (원 미만 버림) — 원가계산 요율이 엑셀에만 있어서 비율로 나눔
+//   기성금 = 금회 직접공사비로 원가계산서를 다시 계산 (이 공사 원가계산서에서 읽은 요율, naeyuk과 같은 방식)
+//           요율로 도급액을 다시 만들지 못하면(엑셀에 모르는 비목 등) 도급액 × 금회 직접공사비 비율로 대신함
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { q, sb } from '../../lib/supabase';
@@ -8,6 +9,9 @@ import { won, qty as fq, today } from '../../lib/format';
 import { useLoad, useToast, Loading, ErrorBox, Pill, Modal, Bar } from '../../lib/ui';
 import { toSheet, type BoqItem } from '../../lib/boqSheet';
 import { leafAmt, leaves, prevQty, q3, remap, roundAmounts, rowMap, rowsOf, total, type QtyMap } from '../../lib/boqProgress';
+import { inferRates } from '../../lib/boqCost';
+import { costSheet } from '../../lib/estimate';
+import { costXSheet, downloadXlsx, roundXSheet } from '../../lib/boqXlsx';
 import { fetchItems } from './BoqChange';
 import { QtyInput } from './BoqPhase';
 
@@ -32,11 +36,12 @@ export default function BoqRounds({ pid, base, canEdit, isAdmin }: { pid: string
   const [imp, setImp] = useState(false);
   const [busy, setBusy] = useState(false);
   const sheet = useMemo(() => (items.data ? toSheet(items.data) : null), [items.data]);
+  const inf = useMemo(() => (sheet && items.data ? inferRates(items.data, total(sheet)) : null), [sheet, items.data]);
 
   if (items.loading || rounds.loading || others.loading) return <Loading />;
   const err = items.error || rounds.error || others.error;
   if (err) return <ErrorBox msg={err} />;
-  if (!sheet) return null;
+  if (!sheet || !inf) return null;
 
   const list = rounds.data || [];
   const maps: QtyMap[] = list.map((r) => (r.revision_id === base.id ? r.qty || {} : remap(r.qty || {}, rowMap((others.data || {})[r.revision_id] || [], items.data || []))));
@@ -71,9 +76,23 @@ export default function BoqRounds({ pid, base, canEdit, isAdmin }: { pid: string
   }
 
   const am = roundAmounts(sheet, allMaps, idx);
-  const curPay = ratioAmt(contract, am.cur.t, whole.t);
-  const cumPay = ratioAmt(contract, am.cum.t, whole.t);
-  const prevPay = ratioAmt(contract, am.prev.t, whole.t);
+  // 원가계산서 방식 (요율 검산이 엑셀 도급액과 같을 때만), 아니면 비율
+  const useCost = Math.abs(inf.calc.total - contract) < 1;
+  const cs = (dd: typeof am.cur) => costSheet({ direct: dd, rates: inf.rates, exclude: inf.exclude });
+  const curCost = cs(am.cur), cumCost = cs(am.cum), prevCost = cs(am.prev);
+  const curPay = useCost ? curCost.total : ratioAmt(contract, am.cur.t, whole.t);
+  const cumPay = useCost ? cumCost.total : ratioAmt(contract, am.cum.t, whole.t);
+  const prevPay = useCost ? prevCost.total : ratioAmt(contract, am.prev.t, whole.t);
+  const excel = async () => {
+    setBusy(true);
+    try {
+      const sub = `기준 ${base.title} · ${(m.period_from || '').replace(/-/g, '.')} ~ ${(m.period_to || '').replace(/-/g, '.')} · ${cur.status === 'confirmed' ? '확정' : '작성 중'}`;
+      const sheets = [roundXSheet({ title: `${m.title} 기성내역서`, sub, lines: sheet.sections[0].lines, prev: (id) => q3(prevQty(allMaps, idx, id)), cur: (id) => Number(curMap[id] || 0) })];
+      if (useCost) sheets.push(costXSheet(`${m.title} 기성 원가계산서`, sub + ' · 요율: 기준 내역서 원가계산서', [['금회', curCost], ['누계', cumCost]]));
+      await downloadXlsx(pid, `${m.title}_기성내역서`, sheets);
+    } catch (e: any) { toast('엑셀 만들기 실패: ' + e.message); }
+    setBusy(false);
+  };
   const m = meta ?? { title: cur.title, period_from: cur.period_from || '', period_to: cur.period_to || '' };
   const dirty = edit !== null || meta !== null;
   const over = leaves(sheet).filter((r) => q3(prevQty(allMaps, idx, r.line.id) + Number(curMap[r.line.id] || 0)) > r.line.qty + 1e-9);
@@ -127,6 +146,7 @@ export default function BoqRounds({ pid, base, canEdit, isAdmin }: { pid: string
           {canEdit && lastConfirmed ? <button className="btn" onClick={newRound}>+ 새 회차</button> : null}
         </div>
         <div className="row">
+          <button className="btn" disabled={busy} onClick={excel}>엑셀 내려받기</button>
           {editable && <button className="btn" onClick={() => setImp(true)}>현장 승인 수량 불러오기</button>}
           {editable && <button className="btn" disabled={busy || !dirty} onClick={() => save()}>저장</button>}
           {editable && <button className="btn pri" disabled={busy} onClick={confirmIt}>확정</button>}
@@ -139,10 +159,11 @@ export default function BoqRounds({ pid, base, canEdit, isAdmin }: { pid: string
 
       <div className="grid g4">
         <div className="stat"><span className="l">금회 직접공사비</span><span className="v">{won(am.cur.t)}</span><span className="s">재료 {won(am.cur.m)} · 노무 {won(am.cur.l)} · 경비 {won(am.cur.e)}</span></div>
-        <div className="stat" style={{ borderColor: 'var(--blue)', background: 'var(--blue-ll)' }}><span className="l">금회 기성금</span><span className="v">{won(curPay)}</span><span className="s">도급액 × 금회 직접공사비 비율</span></div>
+        <div className="stat" style={{ borderColor: 'var(--blue)', background: 'var(--blue-ll)' }}><span className="l">금회 기성금</span><span className="v">{won(curPay)}</span><span className="s">{useCost ? '원가계산서 적용 · 부가세 포함' : '도급액 × 금회 직접공사비 비율'}</span></div>
         <div className="stat"><span className="l">누계 기성률</span><span className="v">{whole.t ? ((am.cum.t / whole.t) * 100).toFixed(1) : 0}%</span><span className="s"><Bar v={whole.t ? (am.cum.t / whole.t) * 100 : 0} teal /></span></div>
         <div className="stat"><span className="l">누계 기성금 · 잔여</span><span className="v">{won(cumPay)}</span><span className="s">전회까지 {won(prevPay)} · 잔여 {won(contract - cumPay)}</span></div>
       </div>
+      {!useCost && <div className="banner">기준 내역서 원가계산서에서 읽은 요율로 도급액을 다시 만들지 못해(차이 {won(inf.calc.total - contract)}원 — 엑셀에 이 프로그램이 모르는 비목이 있을 수 있음), 기성금을 도급액 × 금회 직접공사비 비율로 계산했습니다.</div>}
       {over.length > 0 && <div className="banner red">누계가 계약 수량을 넘는 항목이 {over.length}개 있습니다 (빨간 칸). 확정 전에 고치거나 설계변경으로 수량을 늘리세요.</div>}
       {dirty && <div className="banner"><span style={{ flex: 1 }}>바꾼 내용이 아직 저장되지 않았습니다.</span><button className="btn sm" onClick={() => { setEdit(null); setMeta(null); }}>되돌리기</button><button className="btn sm pri" disabled={busy} onClick={() => save()}>저장</button></div>}
 
@@ -196,8 +217,21 @@ export default function BoqRounds({ pid, base, canEdit, isAdmin }: { pid: string
             <tfoot><tr><td>직접공사비</td><td></td><td className="r">{won(whole.t)}</td><td className="r">{won(am.prev.t)}</td><td></td><td></td><td className="r">{won(am.cur.t)}</td><td className="r">{won(am.cum.t)}</td><td></td></tr></tfoot>
           </table>
         </div>
-        <div className="muted" style={{ padding: '8px 14px 12px' }}>금회 수량은 노란 칸에 넣습니다. 기준 내역서: {base.title} · 도급액 {won(contract)}원. 기성금 = 도급액 × 금회 직접공사비 ÷ 도급 직접공사비 (원 미만 버림).</div>
+        <div className="muted" style={{ padding: '8px 14px 12px' }}>금회 수량은 노란 칸에 넣습니다. 기준 내역서: {base.title} · 도급액 {won(contract)}원. {useCost ? '기성금 = 금회 직접공사비로 다시 계산한 원가계산서 (요율은 기준 내역서 원가계산서에서 읽음).' : '기성금 = 도급액 × 금회 직접공사비 ÷ 도급 직접공사비 (원 미만 버림).'}</div>
       </section>
+
+      {useCost && (
+        <section className="card flat">
+          <div className="card-h" style={{ padding: '12px 14px' }}><h3>기성 원가계산서</h3><span className="muted">요율: {inf.found.map((f) => `${f.label} ${+(f.rate * 100).toFixed(4)}%`).join(' · ')}</span></div>
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>비목</th><th className="r">전회까지</th><th className="r">금회</th><th className="r">누계</th></tr></thead>
+            <tbody>{curCost.rows.filter((r) => r.amount !== null && (r.total || ['dl', 'il', 'exp', 'gen', 'profit', 'vat'].includes(r.key) || r.optional)).map((r) => (
+              <tr key={r.key} style={r.total ? { fontWeight: 700, background: 'var(--head)' } : undefined}>
+                <td>{r.total && r.group ? `${r.group} 계` : r.label}</td><td className="r">{won(prevCost.get(r.key))}</td><td className="r">{won(curCost.get(r.key))}</td><td className="r">{won(cumCost.get(r.key))}</td>
+              </tr>))}</tbody>
+          </table></div>
+        </section>
+      )}
 
       {imp && <FieldImport pid={pid} base={base} items={items.data || []} period={m} current={curMap}
         onClose={() => setImp(false)} onApply={(qty) => { setEdit({ ...curMap, ...qty }); setImp(false); toast('불러왔습니다. 저장을 눌러야 남습니다'); }} />}

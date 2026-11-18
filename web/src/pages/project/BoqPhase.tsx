@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { q, sb } from '../../lib/supabase';
 import { won, qty as fq } from '../../lib/format';
-import { useLoad, useToast, Loading, ErrorBox, Empty } from '../../lib/ui';
+import { useLoad, useToast, Loading, ErrorBox } from '../../lib/ui';
 import { toSheet } from '../../lib/boqSheet';
 import { moveAll, phaseTotals, q3, rowsOf, splitRatio, toAlloc, total, unassignedOf, type QtyMap } from '../../lib/boqProgress';
-import { lineAmount, phaseSheet, flatten } from '../../lib/estimate';
+import { lineAmount, phaseSheet, flatten, costSheet } from '../../lib/estimate';
+import { inferRates } from '../../lib/boqCost';
+import { costXSheet, downloadXlsx, phaseXSheet } from '../../lib/boqXlsx';
 import { fetchItems } from './BoqChange';
 
 const nospace = (s: string) => (s || '').replace(/\s+/g, '');
@@ -37,13 +39,14 @@ export default function BoqPhase({ base, canEdit }: { base: any; canEdit: boolea
   const [to, setTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const sheet = useMemo(() => (items.data ? toSheet(items.data) : null), [items.data]);
+  const inf = useMemo(() => (sheet && items.data ? inferRates(items.data, total(sheet)) : null), [sheet, items.data]);
   const saved: QtyMap[] = useMemo(() => (phases.data || []).map((p) => p.alloc || {}), [phases.data]);
   const cur = maps ?? saved;
   const dirty = maps !== null;
 
   if (items.loading || phases.loading) return <Loading />;
   if (items.error || phases.error) return <ErrorBox msg={items.error || phases.error || ''} />;
-  if (!sheet) return null;
+  if (!sheet || !inf) return null;
   const list = phases.data || [];
 
   const addPhase = async () => {
@@ -64,6 +67,20 @@ export default function BoqPhase({ base, canEdit }: { base: any; canEdit: boolea
   }
 
   const tots = phaseTotals(sheet, cur);
+  // 차수별 계약 금액: 차수 직접공사비로 원가계산서를 다시 계산 (요율은 기준 내역서 원가계산서에서 읽음)
+  const contract = Number(base.totals?.contract || 0);
+  const useCost = Math.abs(inf.calc.total - contract) < 1;
+  const costs = tots.map((t) => costSheet({ direct: t, rates: inf.rates, exclude: inf.exclude }));
+  const excel = async () => {
+    setBusy(true);
+    try {
+      const sub = `기준 ${base.title} · 도급액 ${won(contract)}원`;
+      const sheets = [phaseXSheet({ title: '차수별 내역서', sub, lines: sheet.sections[0].lines, names: list.map((p) => p.name), qty: (i, id) => Number(cur[i]?.[id] || 0) })];
+      if (useCost) sheets.push(costXSheet('차수별 원가계산서', sub + ' · 요율: 기준 내역서 원가계산서', list.map((p, i) => [p.name, costs[i]])));
+      await downloadXlsx(base.project_id, '차수별_내역서', sheets);
+    } catch (e: any) { toast('엑셀 만들기 실패: ' + e.message); }
+    setBusy(false);
+  };
   const all = total(sheet);
   const un = unassignedOf(sheet, cur);
   const alloc = toAlloc(cur);
@@ -108,12 +125,15 @@ export default function BoqPhase({ base, canEdit }: { base: any; canEdit: boolea
     <>
       <div className="grid g4">
         <div className="stat"><span className="l">나눌 직접공사비</span><span className="v">{won(all.t)}</span><span className="s">기준: {base.title}</span></div>
-        {list.map((p, i) => <div key={p.id} className="stat"><span className="l">{p.name}</span><span className="v">{won(tots[i].t)}</span><span className="s">{all.t ? ((tots[i].t / all.t) * 100).toFixed(1) : 0}% · 직접공사비</span></div>)}
+        {list.map((p, i) => <div key={p.id} className="stat"><span className="l">{p.name} {useCost ? '계약 금액' : '직접공사비'}</span><span className="v">{won(useCost ? costs[i].total : tots[i].t)}</span><span className="s">{useCost ? `직접공사비 ${won(tots[i].t)} · ` : ''}{all.t ? ((tots[i].t / all.t) * 100).toFixed(1) : 0}%</span></div>)}
         <div className="stat" style={un.amt ? { borderColor: 'var(--red)' } : undefined}><span className="l">미배정</span><span className="v" style={{ color: un.amt ? 'var(--red)' : undefined }}>{won(un.amt)}</span><span className="s">{Object.keys(un.rest).length}개 항목</span></div>
       </div>
       {un.amt !== 0
         ? <div className="banner red">아직 차수에 넣지 않은 수량이 {Object.keys(un.rest).length}개 항목에 있습니다. 미배정이 0이어야 차수 합이 도급 수량과 맞습니다.</div>
         : <div className="banner teal">모든 항목 수량을 차수에 다 나눴습니다. 차수 합 = 도급 수량.</div>}
+      {useCost ? <div className="muted">차수 계약 금액 = 차수 직접공사비로 다시 계산한 원가계산서 (요율은 ‘{base.title}’ 원가계산서에서 읽음). 차수 합은 끝수 때문에 도급액과 몇 원 다를 수 있습니다 (합 {won(costs.reduce((a, c) => a + c.total, 0))} / 도급액 {won(contract)}).</div>
+        : <div className="muted">원가계산서 요율로 도급액을 다시 만들지 못해 직접공사비만 보여 줍니다.</div>}
+      <div className="row"><button className="btn" disabled={busy} onClick={excel}>엑셀 내려받기</button></div>
       {dirty && <div className="banner"><span style={{ flex: 1 }}>바꾼 내용이 아직 저장되지 않았습니다.</span><button className="btn sm" onClick={() => setMaps(null)}>되돌리기</button><button className="btn sm pri" disabled={busy} onClick={save}>{busy ? '저장 중…' : '저장'}</button></div>}
 
       <section className="card flat">
@@ -166,7 +186,6 @@ export default function BoqPhase({ base, canEdit }: { base: any; canEdit: boolea
         </div>
         <div className="muted" style={{ padding: '8px 14px 12px' }}>수량 칸을 고치면 바로 다시 계산됩니다. 비율로 나누면 마지막 차수가 끝수를 받습니다. 공종 줄의 차수 칸은 그 차수 금액입니다 (원 미만 버림).</div>
       </section>
-      {!Object.keys(un.rest).length && <Empty>모든 항목이 배정됐습니다. 차수별 내역서·원가계산서 엑셀 내려받기는 다음 단계에서 만듭니다.</Empty>}
     </>
   );
 }

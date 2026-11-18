@@ -9,6 +9,7 @@ import { toSheet, type BoqItem } from '../../lib/boqSheet';
 import { rowsOf, total } from '../../lib/boqProgress';
 import { defaultExclude, inferRates, ROUNDS, subCalc } from '../../lib/boqCost';
 import { flatten, type CostKey, type RoundMode } from '../../lib/estimate';
+import { costXSheet, downloadXlsx, subXSheet } from '../../lib/boqXlsx';
 import { fetchItems } from './BoqChange';
 
 const nospace = (s?: string | null) => (s || '').replace(/\s+/g, '');
@@ -116,6 +117,18 @@ export default function BoqSub({ pid, p, base, canEdit, isAdmin }: { pid: string
       await reload(r.id); toast(`만들었습니다. 옮긴 공종 ${picks.length} / ${(cur.picks || []).length}줄 — 설계변경 신규 항목은 직접 체크하세요`);
     } catch (e: any) { toast(e.message); }
   };
+  const excel = async () => {
+    if (!res) return;
+    setBusy(true);
+    try {
+      const sub = `${cur.vendor} · 하도급율 ${+(rateN * 100).toFixed(4)}% · 기준 ${base.title} · ${cur.status === 'confirmed' ? '확정' : '작성 중'}`;
+      await downloadXlsx(pid, `${cur.vendor}_하도급내역서`, [
+        subXSheet({ title: cur.title, sub, target: res.targetLines, rate: rateN }),
+        costXSheet(`${cur.title} · 원·하도급 원가계산서`, sub + ` · 대상 대비 ${pctS(res.ratio)}`, [['하도급 대상', res.target], ['하도급', res.sub]]),
+      ]);
+    } catch (e: any) { toast('엑셀 만들기 실패: ' + e.message); }
+    setBusy(false);
+  };
   const syncProject = async () => {
     if (!res || !projSub) return;
     if (!window.confirm(`프로젝트 정보의 ‘${projSub.name}’ 하도급액을 ${won(res.sub.total)}원으로 바꿀까요?`)) return;
@@ -170,6 +183,7 @@ export default function BoqSub({ pid, p, base, canEdit, isAdmin }: { pid: string
           <div className="card-h">
             <h2>{cur.title}</h2>
             <div className="row">
+              {res && d.picks.size > 0 && <button className="btn" disabled={busy} onClick={excel}>엑셀 내려받기</button>}
               {editable && <button className="btn" disabled={busy || !ed} onClick={() => save()}>저장</button>}
               {editable && <button className="btn pri" disabled={busy || !d.picks.size} onClick={() => window.confirm('확정할까요? 확정하면 고칠 수 없습니다 (관리자만 확정 취소).') && save('confirmed')}>확정</button>}
               {editable && isLatest && <button className="btn sm" onClick={remove}>지우기</button>}

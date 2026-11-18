@@ -6,6 +6,7 @@ import { findBoqSheets, parseBoq } from './detect.mjs';
 import { buildContract } from './contract.mjs';
 import { buildChange } from './change.mjs';
 import { collectRefs } from './refs.mjs';
+import { buildSheetXlsx, checkDoc } from './sheetXlsx.mjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const BUCKET = 'project-files';
@@ -348,6 +349,16 @@ export const boqRoutes = {
     if (error) throw [400, error.message];
     await admin.from('activity_log').insert({ user_id: me.id, action: '내역서 잠금 비밀번호 변경', target: company_id });
     return { ok: true };
+  },
+
+  // 차수 · 기성 · 하도급 엑셀 (화면이 계산한 표 → 엑셀, 읽기 전용)
+  'POST /api/boq/sheet-xlsx': async (me, b) => {
+    await canBoq(me, b.project_id);
+    checkDoc(b.doc);
+    const buf = await buildSheetXlsx(b.doc);
+    const stamp = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+    const name = String(b.doc.file || '내역서').replace(/[\\/:*?"<>|]/g, ' ').slice(0, 80);
+    return { base64: buf.toString('base64'), name: `${name}_${stamp}.xlsx` };
   },
 
   // 일위대가 작성용 단가 자료 (기준 엑셀의 자재 · 노임 · 목록 · 호표)
