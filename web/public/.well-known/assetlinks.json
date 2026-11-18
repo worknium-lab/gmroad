@@ -3,6 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "kr.worknium.gmroad",
-    "sha256_cert_fingerprints": ["35:B0:95:8B:B9:BE:51:5A:43:0E:72:75:E0:55:40:8E:F3:A1:B5:94:45:5A:7B:65:0A:C8:A1:2A:13:BE:79:9B"]
+    "sha256_cert_fingerprints": ["2E:CA:E4:69:05:28:76:1F:89:CA:F3:83:E6:01:35:99:56:C0:D0:AF:FA:8E:C6:F1:B6:D2:45:28:14:4F:4C:11"]
   }
 }]
