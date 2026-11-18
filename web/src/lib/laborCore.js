@@ -7,7 +7,7 @@
   // ---------- 기본 설정 ----------
   function defaultSettings() {
     return {
-      site: '공릉천교', project: '', siteAddr: '',
+      site: '', project: '', siteAddr: '',
       company: '(주)지엠로드', ceo: '', bizAddr: '', bizTel: '',
       year: 2026, month: 10, payDay: 10,
       workStart: '07:00', workEnd: '17:00', breakTime: '12:00~13:00', holiday: '일요일',
