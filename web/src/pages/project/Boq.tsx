@@ -484,14 +484,14 @@ function CostView({ rev, base }: { rev: Rev; base?: Rev }) {
           <section className="card">
             <h3>검산</h3>
             <span className="muted">공종별 내역을 적산 규칙으로 다시 더해 원가계산서 첫 줄들과 맞춰 봅니다.</span>
-            <table className="tbl">
+            <div className="tbl-wrap"><table className="tbl">
               <thead><tr><th>비목</th><th className="r">원가계산서</th><th className="r">다시 계산</th><th></th></tr></thead>
               <tbody>{checks.map(([l, x, c]) => {
                 const ok = x !== null && Math.abs(x - c) < 1;
                 return <tr key={l}><td>{l}</td><td className="r">{x === null ? '—' : won(x)}</td><td className="r">{won(c)}</td>
                   <td>{x === null ? <span className="muted">줄 없음</span> : ok ? <Pill c="green">같음</Pill> : <Pill c="orange">{(c - x > 0 ? '+' : '') + won(c - x)}</Pill>}</td></tr>;
               })}</tbody>
-            </table>
+            </table></div>
           </section>
         )}
       </div>
